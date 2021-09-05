@@ -5,7 +5,7 @@ void mainLoop()
 {
     srandom(rank);
     while (stan != InFinish) {
-        int perc = random()%100; 
+        /*int perc = random()%100; 
 
         if (perc<STATE_CHANGE_PROB) {
             if (stan==InRun) {
@@ -22,6 +22,28 @@ void mainLoop()
             } else {
             }
         }
-        sleep(SEC_IN_STATE);
+        sleep(SEC_IN_STATE);*/
+        if(rank < BIBLIOTEKARZE) {
+            if (stan==Preparing) {
+                int perc = random()%100;
+                if (perc < STATE_CHANGE_PROB) {
+                    sleep( SEC_IN_STATE);
+                    for (int i = BIBLIOTEKARZE; i < size; i++) {
+                        sendPacket(0, i, ERRAND);
+                    }
+                    changeState(Waiting);
+                }
+            }
+        } else {
+            if (stan==Executing) {
+                int perc = random()%100;
+                if (perc < STATE_CHANGE_PROB) {
+                    sleep(SEC_IN_STATE);
+                    sendPacket(0, zlecenie_dla, REQ_LIB);
+                    changeState(FinishErrand);
+                    my_priority++;
+                }
+            }
+        }
     }
 }
