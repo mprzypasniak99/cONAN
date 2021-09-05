@@ -22,7 +22,7 @@
 #define ROOT 0
 
 /* stany procesu */
-typedef enum {InRun, InMonitor, InSend, InFinish} state_t;
+typedef enum { Waiting, Preparing } librarian_state
 extern state_t stan;
 extern int rank;
 extern int size;
@@ -49,12 +49,15 @@ typedef struct {
 extern MPI_Datatype MPI_PAKIET_T;
 
 /* Typy wiadomości */
-#define FINISH 1
-#define TALLOWTRANSPORT 2
-#define INRUN 3
-#define INMONITOR 4
-#define GIVEMESTATE 5
-#define STATE 6
+#define ERRAND 1
+#define REQ_ERRAND 2
+#define ACK_ERRAND 3
+#define REQ_EQ 4
+#define ACK_EQ 5
+#define REQ_LIB 6
+#define ACK_LIB 7
+#define REQ_LAUNDRY 8
+#define ACK_LAUNDRY 9
 
 /* macro debug - działa jak printf, kiedy zdefiniowano
    DEBUG, kiedy DEBUG niezdefiniowane działa jak instrukcja pusta 
