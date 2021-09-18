@@ -1,10 +1,11 @@
 #include "queue.h"
+#include "stdlib.h"
 
 void deleteQueue(queue* item) {
-    if (queue.nextItem != NULL)
+    if (item->nextItem != NULL)
     {
-        deleteQueue(queue.nextItem);
+        deleteQueue(item->nextItem);
     }
 
-    free(queue);
+    free(item);
 }

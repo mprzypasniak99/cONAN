@@ -1,11 +1,11 @@
 #ifndef QUEUE_H
 #define QUEUE_H
 
-struct queue
+typedef struct
 {
     int destination;
     queue* nextItem;
-};
+} queue;
 
 void deleteQueue(queue* item);
 

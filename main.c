@@ -12,9 +12,9 @@
 
 int lamport;
 
-state_t stan=InRun;
+conan_state stan=Ready;
 volatile char end = FALSE;
-int size,rank, tallow; /* nie trzeba zerować, bo zmienna globalna statyczna */
+int size,rank; /* nie trzeba zerować, bo zmienna globalna statyczna */
 MPI_Datatype MPI_PAKIET_T;
 pthread_t threadKom, threadMon;
 
@@ -24,7 +24,7 @@ pthread_mutex_t lamportMut = PTHREAD_MUTEX_INITIALIZER;
 
 int incLamport() {
 	pthread_mutex_lock(&lamportMut);
-	if(stan == InFinish) {
+	if(stan == Exit) {
 		pthread_mutex_unlock(&lamportMut);
 		return lamport;
 	}
@@ -35,7 +35,7 @@ int incLamport() {
 
 int setMaxLamport(int nowy) {
 	pthread_mutex_lock(&lamportMut);
-	if(stan == InFinish) {
+	if(stan == Exit) {
 		pthread_mutex_unlock(&lamportMut);
 		return lamport;
 	}
@@ -85,14 +85,15 @@ void inicjuj(int *argc, char ***argv)
        brzydzimy się czymś w rodzaju MPI_Send(&typ, sizeof(pakiet_t), MPI_BYTE....
     */
     /* sklejone z stackoverflow */
-    const int nitems=3; /* bo packet_t ma trzy pola */
-    int       blocklengths[3] = {1,1,1};
-    MPI_Datatype typy[3] = {MPI_INT, MPI_INT, MPI_INT};
+    const int nitems=4; /* bo packet_t ma trzy pola */
+    int       blocklengths[4] = {1,1,1,1};
+    MPI_Datatype typy[4] = {MPI_INT, MPI_INT, MPI_INT, MPI_INT};
 
-    MPI_Aint     offsets[3]; 
+    MPI_Aint     offsets[4]; 
     offsets[0] = offsetof(packet_t, ts);
     offsets[1] = offsetof(packet_t, src);
-    offsets[2] = offsetof(packet_t, data);
+    offsets[2] = offsetof(packet_t, priority);
+    offsets[3] = offsetof(packet_t, data);
 
     MPI_Type_create_struct(nitems, blocklengths, offsets, typy, &MPI_PAKIET_T);
     MPI_Type_commit(&MPI_PAKIET_T);
@@ -134,21 +135,21 @@ void sendPacket(packet_t *pkt, int destination, int tag)
     if (freepkt) free(pkt);
 }
 
-void changeTallow( int newTallow )
-{
-    pthread_mutex_lock( &tallowMut );
-    if (stan==InFinish) { 
-	pthread_mutex_unlock( &tallowMut );
-        return;
-    }
-    tallow += newTallow;
-    pthread_mutex_unlock( &tallowMut );
-}
+// void changeTallow( int newTallow )
+// {
+//     pthread_mutex_lock( &tallowMut );
+//     if (stan==InFinish) { 
+// 	pthread_mutex_unlock( &tallowMut );
+//         return;
+//     }
+//     tallow += newTallow;
+//     pthread_mutex_unlock( &tallowMut );
+// }
 
-void changeState( state_t newState )
+void changeState( conan_state newState )
 {
     pthread_mutex_lock( &stateMut );
-    if (stan==InFinish) { 
+    if (stan==Exit) { 
 	pthread_mutex_unlock( &stateMut );
         return;
     }
@@ -160,7 +161,6 @@ int main(int argc, char **argv)
 {
     /* Tworzenie wątków, inicjalizacja itp */
     inicjuj(&argc,&argv); // tworzy wątek komunikacyjny w "watek_komunikacyjny.c"
-    tallow = 1000; // by było wiadomo ile jest łoju
     mainLoop();          // w pliku "watek_glowny.c"
 
     finalizuj();

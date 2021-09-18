@@ -10,26 +10,26 @@ queue* equipmentQueue;
 queue* laundryQueue;
 
 void initConan() {
-    conan_state = Ready;
+    conanState = Ready;
 
-    errandQueue = NULL
-    equipmentQueue = NULL
-    laundryQueue = NULL
+    errandQueue = NULL;
+    equipmentQueue = NULL;
+    laundryQueue = NULL;
 
     pthread_create(&conanCommunicationThread, NULL, conanCommunicationThread, 0);
 }
 
 void finalizeConan() {
-    pthread_join(conanCommunicationThread, NULL)
+    pthread_join(conanCommunicationThread, NULL);
 
-    deleteQueue(errandQueue)
-    deleteQueue(equipmentQueue)
-    deleteQueue(laundryQueue)
+    deleteQueue(errandQueue);
+    deleteQueue(equipmentQueue);
+    deleteQueue(laundryQueue);
 }
 
 void conanMainLoop() {
-    while(conan_state != Exit) {
-        switch (conan_state)
+    while(conanState != Exit) {
+        switch (conanState)
         {
         case Ready:
             if (errandQueue != NULL)

@@ -9,11 +9,19 @@
 #include <unistd.h>
 #include <string.h>
 #include <pthread.h>
+#include "conan_state.h"
 /* odkomentować, jeżeli się chce DEBUGI */
 //#define DEBUG 
 /* boolean */
 #define TRUE 1
 #define FALSE 0
+
+#define TAKEN 2
+
+#define BIBLIOTEKARZE 1
+#define CONANI 1
+#define PRALNIA 1
+#define STROJE 1
 
 /* używane w wątku głównym, determinuje jak często i na jak długo zmieniają się stany */
 #define STATE_CHANGE_PROB 50
@@ -22,17 +30,18 @@
 #define ROOT 0
 
 /* stany procesu */
-typedef enum { Waiting, Preparing } librarian_state
-extern state_t stan;
+typedef enum { Waiting, Preparing } librarian_state;
+extern conan_state stan;
 extern int rank;
 extern int size;
+extern int my_priority;
+extern int zlecenie_dla;
+extern int zlecenia[BIBLIOTEKARZE];
+extern int zebrane_ack[CONANI];
 
 extern int lamport;
 int incLamport();
 int setMaxLamport(int nowy);
-
-/* Ile mamy łoju na składzie? */
-extern int tallow;
 
 /* stan globalny wykryty przez monitor */
 extern int globalState;
@@ -43,7 +52,7 @@ extern int numberReceived;
 typedef struct {
     int ts;       /* timestamp (zegar lamporta */
     int src;      /* pole nie przesyłane, ale ustawiane w main_loop */
-
+    int priority;
     int data;     /* przykładowe pole z danymi; można zmienić nazwę na bardziej pasującą */
 } packet_t;
 extern MPI_Datatype MPI_PAKIET_T;
@@ -58,6 +67,7 @@ extern MPI_Datatype MPI_PAKIET_T;
 #define ACK_LIB 7
 #define REQ_LAUNDRY 8
 #define ACK_LAUNDRY 9
+#define FINISH 10
 
 /* macro debug - działa jak printf, kiedy zdefiniowano
    DEBUG, kiedy DEBUG niezdefiniowane działa jak instrukcja pusta 
@@ -99,5 +109,4 @@ extern MPI_Datatype MPI_PAKIET_T;
 /* wysyłanie pakietu, skrót: wskaźnik do pakietu (0 oznacza stwórz pusty pakiet), do kogo, z jakim typem */
 void sendPacket(packet_t *pkt, int destination, int tag);
 void changeState( state_t );
-void changeTallow( int );
 #endif

@@ -1,7 +1,7 @@
 #ifndef CONAN_MAIN_H
 #define CONAN_MAIN_H
 
-pthread_t conanCommunicationThread;
+pthread_t ConanCommunicationThread;
 
 void initConan();
 
