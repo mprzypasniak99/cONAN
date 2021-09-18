@@ -38,6 +38,8 @@ extern int my_priority;
 extern int zlecenie_dla;
 extern int zlecenia[BIBLIOTEKARZE];
 extern int zebrane_ack[CONANI];
+extern int zebrane_eq_req[CONANI];
+extern int zebrane_eq_ack[CONANI]; // wydaję mi się, że dwie struktury są potrzebne, bo dopiero po zebraniu od wszystkich ACK LUB REQ my wysyłamy ACK i w jednej strukturze by się psuło, bo żeby przejść dalej musimy wiedzieć, że dostaliśmy od wszystkich WYŁĄCZNIE ACK (za długa linia, wiem, bujaj się)
 
 extern int lamport;
 int incLamport();
