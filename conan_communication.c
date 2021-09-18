@@ -40,87 +40,91 @@ void *conanCommunicationThread(void *ptr) {
                     }
                 case REQ_ERRAND:
                     switch (stan) {
-                    case Ready:
-                        if(packet.priority < my_priority || (packet.priority == my_priority && rank < packet.src)) {
-                            changeState(CompeteForErrand);
-                            for (int i = BIBLIOTEKARZE; i <= size; i++) {
-                                zlecenia[packet.data] = TRUE;
-                                zlecenie_dla = packet.data;
-                                packet.data = packet.data;
-                                packet.priority = my_priority;
-                                sendPacket(&packet, i, REQ_ERRAND);
-                            }
-                        } else {
-                            zlecenia[packet.data] = TAKEN;
-                            sendPacket(0, packet.src, ACK_ERRAND);
-                        }
-                        break;
-                    case CompeteForErrand:
-                        if(packet.data == zlecenie_dla) {
-                            if(packet.priority > my_priority || (packet.priority == my_priority && rank > packet.src)) {
-                                zlecenie_dla = -1;
-                                zlecenia[packet.data] = FALSE;
-                                sendPacket(0, packet.src, ACK_ERRAND);
-                                for(int i = 0; i < CONANI; i++) {
-                                    zebrane_ack[i] = FALSE;
+                        case Ready:
+                            if(packet.priority < my_priority || (packet.priority == my_priority && rank < packet.src)) {
+                                changeState(CompeteForErrand);
+                                for (int i = BIBLIOTEKARZE; i <= size; i++) {
+                                    zlecenia[packet.data] = TRUE;
+                                    zlecenie_dla = packet.data;
+                                    packet.data = packet.data;
+                                    packet.priority = my_priority;
+                                    sendPacket(&packet, i, REQ_ERRAND);
                                 }
-                                int flag = TRUE;
-                                for(int i = 0; i < BIBLIOTEKARZE; i++) {
-                                    if(zlecenia[i]) {
-                                        flag = FALSE;
-                                        for (int j = BIBLIOTEKARZE; j <= size; j++) {
-                                            zlecenie_dla = i;
-                                            packet.data = i;
-                                            packet.priority = my_priority;
-                                            sendPacket(&packet, j, REQ_ERRAND);
-                                        }
-                                        break;
-
-                                    }
-                                }
-                                if(flag) changeState(Ready);
-                            }
-                        } else {
-                            if(zlecenia[packet.data] == FALSE) {
-                                zlecenia[packet.data] = TAKEN;
                             } else {
-                                zlecenia[packet.data] = FALSE;
+                                zlecenia[packet.data] = TAKEN;
+                                sendPacket(0, packet.src, ACK_ERRAND);
                             }
+                            break;
+                        case CompeteForErrand:
+                            if(packet.data == zlecenie_dla) {
+                                if(packet.priority > my_priority || (packet.priority == my_priority && rank > packet.src)) {
+                                    zlecenie_dla = -1;
+                                    zlecenia[packet.data] = FALSE;
+                                    sendPacket(0, packet.src, ACK_ERRAND);
+                                    for(int i = 0; i < CONANI; i++) {
+                                        zebrane_ack[i] = FALSE;
+                                    }
+                                    int flag = TRUE;
+                                    for(int i = 0; i < BIBLIOTEKARZE; i++) {
+                                        if(zlecenia[i]) {
+                                            flag = FALSE;
+                                            for (int j = BIBLIOTEKARZE; j <= size; j++) {
+                                                zlecenie_dla = i;
+                                                packet.data = i;
+                                                packet.priority = my_priority;
+                                                sendPacket(&packet, j, REQ_ERRAND);
+                                            }
+                                            break;
+
+                                        }
+                                    }
+                                    if(flag) changeState(Ready);
+                                }
+                            } else {
+                                if(zlecenia[packet.data] == FALSE) {
+                                    zlecenia[packet.data] = TAKEN;
+                                } else {
+                                    zlecenia[packet.data] = FALSE;
+                                }
+                                sendPacket(0, packet.src, ACK_ERRAND);
+                                // obawiam się problemów z priorytetem
+                            }
+                        default:
                             sendPacket(0, packet.src, ACK_ERRAND);
-                            // obawiam się problemów z priorytetem
-                        }
-                    default:
-                        sendPacket(0, packet.src, ACK_ERRAND);
-                        break;
+                            break;
                     }
                 case ACK_ERRAND:
-                    switch (stan)
-                    {
-                    case CompeteForErrand:
-                        zebrane_ack[packet.src - BIBLIOTEKARZE] = TRUE;
-                        int all_ack_collected = TRUE;
-                        for (int i = 0; i < CONANI; i++) {
-                            if(zebrane_ack[i] == FALSE) {
-                                all_ack_collected = FALSE;
-                                break;
-                            }
-                        }
-                        if(all_ack_collected) {
+                    switch (stan) {
+                        case CompeteForErrand:
+                            zebrane_ack[packet.src - BIBLIOTEKARZE] = TRUE;
+                            int all_ack_collected = TRUE;
                             for (int i = 0; i < CONANI; i++) {
-                                zebrane_ack[i] = FALSE;
+                                if(zebrane_ack[i] == FALSE) {
+                                    all_ack_collected = FALSE;
+                                    break;
+                                }
                             }
-                            changeState(CollectingEq);
-                            for (int i = BIBLIOTEKARZE; i <= size; i++) {
-                                zlecenie_dla = i;
-                                packet.data = i;
-                                packet.priority = my_priority;
-                                sendPacket(&packet, i, REQ_EQ);
+                            if(all_ack_collected) {
+                                for (int i = 0; i < CONANI; i++) {
+                                    zebrane_ack[i] = FALSE;
+                                }
+                                changeState(CollectingEq);
+                                for (int i = BIBLIOTEKARZE; i <= size; i++) {
+                                    zlecenie_dla = i;
+                                    packet.data = i;
+                                    packet.priority = my_priority;
+                                    sendPacket(&packet, i, REQ_EQ);
+                                }
                             }
-                        }
-                        break;
-                    
-                    default:
-                        break;
+                            break;
+                        default:
+                            break;
+                    }
+                case REQ_EQ:
+                    switch (stan) {
+                        default:
+                            sendPacket(0, packet.src, ACK_EQ);
+                            break;
                     }
             }
     }
