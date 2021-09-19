@@ -19,7 +19,7 @@
 #define TAKEN 2
 
 #define BIBLIOTEKARZE 1
-#define CONANI 1
+#define CONANI 7
 #define PRALNIA 1
 #define STROJE 1
 
@@ -30,8 +30,9 @@
 #define ROOT 0
 
 /* stany procesu */
-typedef enum { Waiting, Preparing } librarian_state;
+typedef enum { Waiting, Preparing, Exit_Librarian } librarian_state;
 extern conan_state stan;
+extern librarian_state l_stan;
 extern int rank;
 extern int size;
 extern int my_priority;
@@ -68,6 +69,9 @@ extern MPI_Datatype MPI_PAKIET_T;
 #define REQ_LAUNDRY 8
 #define ACK_LAUNDRY 9
 #define FINISH 10
+
+#define START_INTERNAL 11
+#define END_INTERNAL 12
 
 /* macro debug - działa jak printf, kiedy zdefiniowano
    DEBUG, kiedy DEBUG niezdefiniowane działa jak instrukcja pusta 
@@ -108,5 +112,6 @@ extern MPI_Datatype MPI_PAKIET_T;
 
 /* wysyłanie pakietu, skrót: wskaźnik do pakietu (0 oznacza stwórz pusty pakiet), do kogo, z jakim typem */
 void sendPacket(packet_t *pkt, int destination, int tag);
-void changeState( state_t );
+void changeState( conan_state );
+void changeLibrarianState( librarian_state newState );
 #endif
