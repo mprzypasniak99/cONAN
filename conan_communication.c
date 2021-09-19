@@ -2,10 +2,18 @@
 #include "conan_state.h"
 #include "main.h"
 
+queue* equipmentQueue;
+
 void clearAcks() {
     for (int i = 0; i < CONANI; i++)
     {   
         zebrane_ack[i] = (i == rank - BIBLIOTEKARZE) ? TRUE : FALSE;
+    }
+}
+
+void clearEqAcks() {
+    for (int i = 0; i < CONANI; i++) {
+        zebrane_eq_ack[i] = (i == rank - BIBLIOTEKARZE) ? TRUE : FALSE;    
     }
 }
 
@@ -14,6 +22,52 @@ void sendAckErrandPacket(int dest, int errand) {
     packet.data = errand;
 
     sendPacket(&packet, dest, ACK_ERRAND);
+}
+
+void startCollectingEq() {
+    clearEqAcks();
+    packet_t packet;
+    packet.data = zlecenie_dla;
+    debug("Started collecting EQ for errand %d", zlecenie_dla);
+    for (int i = BIBLIOTEKARZE; i < size; i++)
+    {
+        if (i != rank) {
+            sendPacket(&packet, i, REQ_EQ);
+        }
+    }
+    
+}
+
+void tryCompetingForErrandFromList() {
+    zlecenia[zlecenie_dla] = TAKEN;
+    zlecenie_dla = -1;
+    
+    clearAcks();
+    int flag = TRUE;
+    for (int i = 0; i < BIBLIOTEKARZE; i++)
+    {
+        if (zlecenia[i] == TRUE)
+        {
+            flag = FALSE;
+            debug("Started competing for errand for librarian %d", i);
+
+            packet_t packet;
+            for (int j = BIBLIOTEKARZE; j < size; j++)
+            {
+                if (j != rank)
+                {
+                    zlecenie_dla = i;
+                    packet.data = i;
+                    packet.priority = my_priority;
+                    sendPacket(&packet, j, REQ_ERRAND);
+                    //debug("Sent REQ_ERRAND to %d for errand %d", j, packet.data);
+                }
+            }
+            break;
+        }
+    }
+    if (flag)
+        changeState(Ready);
 }
 
 void *conanCommunicationThread(void *ptr) {
@@ -43,7 +97,7 @@ void *conanCommunicationThread(void *ptr) {
                                 if(i != rank) {
                                     zlecenia[zlecenie_dla] = TRUE;
                                     sendPacket(&packet, i, REQ_ERRAND);
-                                    debug("Sent REQ_ERRAND to %d for errand %d", i, packet.data);
+                                    //debug("Sent REQ_ERRAND to %d for errand %d", i, packet.data);
                                 }
                             }
                             break;
@@ -61,7 +115,7 @@ void *conanCommunicationThread(void *ptr) {
                     }
                     break;
                 case REQ_ERRAND:
-                    debug("Received REQ_ERRAND from %d for errand %d", packet.src, packet.data);
+                    //debug("Received REQ_ERRAND from %d for errand %d", packet.src, packet.data);
                     switch (stan) {
                         case Ready:
                             if((packet.priority < my_priority || (packet.priority == my_priority && packet.src > rank)) &&
@@ -74,43 +128,22 @@ void *conanCommunicationThread(void *ptr) {
                                         zlecenia[packet.data] = TRUE;
                                         zlecenie_dla = packet.data;
                                         sendPacket(&packet, i, REQ_ERRAND);
-                                        debug("Sent REQ_ERRAND to %d for errand %d", i, packet.data);
+                                        //debug("Sent REQ_ERRAND to %d for errand %d", i, packet.data);
                                     }
                                 }
                             } else {
                                 zlecenia[packet.data] = TAKEN;
                                 sendAckErrandPacket(packet.src, packet.data);
-                                debug("Sent ACK_ERRAND to %d for errand %d due to higher priority REQ", packet.src, packet.data);
+                                //debug("Sent ACK_ERRAND to %d for errand %d due to higher priority REQ", packet.src, packet.data);
                             }
                             break;
                         case CompeteForErrand:
                             if(packet.data == zlecenie_dla) {
                                 if(packet.priority > my_priority || (packet.priority == my_priority && packet.src < rank)) {
-                                    zlecenie_dla = -1;
-                                    zlecenia[packet.data] = TAKEN;
                                     sendAckErrandPacket(packet.src, packet.data);
+                                    //debug("Sent ACK_ERRAND to %d for errand %d", packet.src, packet.data);
 
-                                    debug("Sent ACK_ERRAND to %d for errand %d", packet.src, packet.data);
-                                    clearAcks();
-                                    int flag = TRUE;
-                                    for(int i = 0; i < BIBLIOTEKARZE; i++) {
-                                        if(zlecenia[i] == TRUE) {
-                                            flag = FALSE;
-                                            debug("Started competing for errand for librarian %d", i);
-                                            for (int j = BIBLIOTEKARZE; j < size; j++) {
-                                                if(j != rank) {
-                                                    zlecenie_dla = i;
-                                                    packet.data = i;
-                                                    packet.priority = my_priority;
-                                                    sendPacket(&packet, j, REQ_ERRAND);
-                                                    debug("Sent REQ_ERRAND to %d for errand %d", j, packet.data);
-                                                }
-                                            }
-                                            break;
-
-                                        }
-                                    }
-                                    if(flag) changeState(Ready);
+                                    tryCompetingForErrandFromList();
                                 }
                             } else {
                                 if(packet.priority > my_priority || (packet.priority == my_priority && packet.src < rank)) {
@@ -120,7 +153,7 @@ void *conanCommunicationThread(void *ptr) {
                                         zlecenia[packet.data] = FALSE;
                                     }
                                     sendAckErrandPacket(packet.src, packet.data);
-                                    debug("Sent ACK_ERRAND to %d for errand %d", packet.src, packet.data);
+                                    //debug("Sent ACK_ERRAND to %d for errand %d", packet.src, packet.data);
                                 } else {
                                     if (zlecenia[packet.data] != TAKEN) 
                                     {
@@ -162,9 +195,9 @@ void *conanCommunicationThread(void *ptr) {
                                 //     packet.priority = my_priority;
                                 //     sendPacket(&packet, i, REQ_EQ);
                                 // }
-                                changeState(Executing);
+                                changeState(CollectingEq);
                                 debug("Collected all ACKs for errand %d", zlecenie_dla);
-                                sendPacket(0, rank, START_INTERNAL);
+                                startCollectingEq();
                             }
                             break;
                         default:
@@ -173,6 +206,15 @@ void *conanCommunicationThread(void *ptr) {
                     break;
                 case REQ_EQ:
                     switch (stan) {
+                        case CompeteForErrand:
+                            if (packet.data == zlecenie_dla) {
+                                tryCompetingForErrandFromList();
+                            } else {
+                                forwardPacket(&packet, rank, ACK_ERRAND);
+                            }
+                            debug("Sent ACK_EQ to %d", packet.src);
+                            sendPacket(0, packet.src, ACK_EQ);
+                            break;
                         case CollectingEq:
                             if (equipmentQueue == NULL) {
                                 equipmentQueue = malloc(sizeof(queue));
@@ -210,6 +252,7 @@ void *conanCommunicationThread(void *ptr) {
                 case ACK_EQ:
                     switch (stan) {
                         case CollectingEq:
+                            debug("Received ACK_EQ from %d", packet.src);
                             zebrane_eq_req[packet.src - BIBLIOTEKARZE] = TRUE;
                             zebrane_eq_ack[packet.src - BIBLIOTEKARZE] = TRUE;
                             req_check();
@@ -225,7 +268,9 @@ void *conanCommunicationThread(void *ptr) {
                                     zebrane_eq_req[i] = FALSE;
                                     zebrane_eq_ack[i] = FALSE;
                                 }
+                                debug("Collected ACK_EQ from everyone. Starting execution");
                                 changeState(Executing);
+                                sendPacket(0, rank, START_INTERNAL);
                             }
                     }
                     break;
@@ -249,7 +294,7 @@ void *conanCommunicationThread(void *ptr) {
                     break;
                     
             }
-        sleep(5);
+        sleep(1);
     }
     
 }

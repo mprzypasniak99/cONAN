@@ -17,7 +17,7 @@ run: main
 	mpirun -np 8 ./main
 
 send:
-	scp -r ../cONAN inf$(IDX)@polluks.cs.put.poznan.pl:~/mpi
+	scp $(SOURCES) $(HEADERS) Makefile inf$(IDX)@polluks.cs.put.poznan.pl:~/mpi/cONAN/
 
 get:
-	scp -r inf$(IDX)@polluks.cs.put.poznan.pl:~/mpi/cONAN ..
+	scp -r $(FILES) inf$(IDX)@polluks.cs.put.poznan.pl:~/mpi/cONAN ..

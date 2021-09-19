@@ -18,8 +18,8 @@
 
 #define TAKEN 2
 
-#define BIBLIOTEKARZE 1
-#define CONANI 7
+#define BIBLIOTEKARZE 2
+#define CONANI 6
 #define PRALNIA 1
 #define STROJE 1
 
@@ -114,6 +114,7 @@ extern MPI_Datatype MPI_PAKIET_T;
 
 /* wysyłanie pakietu, skrót: wskaźnik do pakietu (0 oznacza stwórz pusty pakiet), do kogo, z jakim typem */
 void sendPacket(packet_t *pkt, int destination, int tag);
+void forwardPacket(packet_t *pkt, int destination, int tag);
 void changeState( conan_state );
 void changeLibrarianState( librarian_state newState );
 #endif

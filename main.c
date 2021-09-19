@@ -21,6 +21,8 @@ int my_priority = 0;
 int zlecenie_dla;
 int zlecenia[BIBLIOTEKARZE];
 int zebrane_ack[CONANI];
+int zebrane_eq_req[CONANI];
+int zebrane_eq_ack[CONANI];
 MPI_Datatype MPI_PAKIET_T;
 pthread_t threadKom, threadMon;
 
@@ -142,6 +144,12 @@ void sendPacket(packet_t *pkt, int destination, int tag)
     pkt->priority = my_priority;
     MPI_Send( pkt, 1, MPI_PAKIET_T, destination, tag, MPI_COMM_WORLD);
     if (freepkt) free(pkt);
+}
+
+void forwardPacket(packet_t *pkt, int destination, int tag) {
+    if (pkt != NULL) {
+        MPI_Send ( pkt, 1, MPI_PAKIET_T, destination, tag, MPI_COMM_WORLD);
+    }
 }
 
 // void changeTallow( int newTallow )
