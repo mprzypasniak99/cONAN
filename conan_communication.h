@@ -3,4 +3,6 @@
 
 void *conanCommunicationThread(void *ptr);
 
+void req_check();
+
 #endif

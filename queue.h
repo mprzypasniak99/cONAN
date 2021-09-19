@@ -4,6 +4,7 @@
 typedef struct queue
 {
     int destination;
+    int priority;
     struct queue* nextItem;
 } queue;
 

@@ -173,9 +173,60 @@ void *conanCommunicationThread(void *ptr) {
                     break;
                 case REQ_EQ:
                     switch (stan) {
+                        case CollectingEq:
+                            if (equipmentQueue == NULL) {
+                                equipmentQueue = malloc(sizeof(queue));
+                                if (equipmentQueue == NULL) {
+                                    //coś się zepsuło, handling błędów kiedy indziej XD
+                                    exit(284829);
+                                }
+                                equipmentQueue->destination = packet.src;
+                                equipmentQueue->priority = packet.priority;
+                                equipmentQueue->nextItem = NULL;
+                            } else {
+                                queue *tmp = equipmentQueue;
+                                while (tmp != NULL) {
+                                    if(packet.priority < tmp->priority) {
+                                        queue* swap = malloc(sizeof(queue));
+                                        swap->destination = tmp->destination;
+                                        swap->nextItem = tmp->nextItem;
+                                        swap->priority = tmp->priority;
+                                        tmp->destination = packet.src;
+                                        tmp->nextItem = swap;
+                                        tmp->priority = packet.priority;
+                                        break;
+                                    } else tmp = tmp->nextItem;
+                                }
+                            }
+                            zebrane_eq_req[packet.src - BIBLIOTEKARZE] = TRUE;
+                            req_check();
+                            break;
                         default:
                             sendPacket(0, packet.src, ACK_EQ);
                             break;
+                        // nie będę oszukiwał, te priorytety to istotna zabawka, która może nam coś spier............. zepsuć (:
+                        // nie wiem też czy wszystko co trzeba
+                    }
+                case ACK_EQ:
+                    switch (stan) {
+                        case CollectingEq:
+                            zebrane_eq_req[packet.src - BIBLIOTEKARZE] = TRUE;
+                            zebrane_eq_ack[packet.src - BIBLIOTEKARZE] = TRUE;
+                            req_check();
+                            int all_ack_collected = TRUE;
+                            for (int i = 0; i < CONANI; i++) {
+                                if(zebrane_eq_ack[i] == FALSE) {
+                                    all_ack_collected = FALSE;
+                                    break;
+                                }
+                            }
+                            if(all_ack_collected) {
+                                for (int i = 0; i < CONANI; i++) {
+                                    zebrane_eq_req[i] = FALSE;
+                                    zebrane_eq_ack[i] = FALSE;
+                                }
+                                changeState(Executing);
+                            }
                     }
                     break;
                 case ACK_LIB:
@@ -199,5 +250,28 @@ void *conanCommunicationThread(void *ptr) {
                     
             }
         sleep(5);
+    }
+    
+}
+
+void req_check() {
+    int all_ack_collected = TRUE;
+    for (int i = 0; i < CONANI; i++) {
+        if(zebrane_eq_req[i] == FALSE) {
+            all_ack_collected = FALSE;
+            break;
+        }
+    }
+    if(all_ack_collected) {
+        for (int i = 0; i < CONANI; i++) {
+            zebrane_eq_req[i] = FALSE;
+        }
+        int i = 0;
+        queue *tmp = equipmentQueue;
+        while(i <= STROJE || tmp == NULL) {
+            sendPacket(0, tmp->destination, ACK_EQ);
+            tmp = tmp->nextItem;
+        }
+        equipmentQueue = tmp;
     }
 }
