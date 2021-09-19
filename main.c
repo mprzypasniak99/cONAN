@@ -1,6 +1,7 @@
 #include "main.h"
-#include "watek_komunikacyjny.h"
-#include "watek_glowny.h"
+#include "conan_communication.h"
+#include "librarian_main.h"
+#include "conan_main.h"
 #include "monitor.h"
 /* wątki */
 #include <pthread.h>
@@ -13,8 +14,13 @@
 int lamport;
 
 conan_state stan=Ready;
+librarian_state l_stan=Preparing;
 volatile char end = FALSE;
 int size,rank; /* nie trzeba zerować, bo zmienna globalna statyczna */
+int my_priority = 0;
+int zlecenie_dla;
+int zlecenia[BIBLIOTEKARZE];
+int zebrane_ack[CONANI];
 MPI_Datatype MPI_PAKIET_T;
 pthread_t threadKom, threadMon;
 
@@ -102,7 +108,9 @@ void inicjuj(int *argc, char ***argv)
     MPI_Comm_size(MPI_COMM_WORLD, &size);
     srand(rank);
 
-    pthread_create( &threadKom, NULL, startKomWatek , 0);
+    if(rank >= BIBLIOTEKARZE) {
+        pthread_create( &threadKom, NULL, conanCommunicationThread, 0);
+    }
     if (rank==0) {
 	pthread_create( &threadMon, NULL, startMonitor, 0);
     }
@@ -131,6 +139,7 @@ void sendPacket(packet_t *pkt, int destination, int tag)
     if (pkt==0) { pkt = malloc(sizeof(packet_t)); freepkt=1;}
     pkt->src = rank;
     pkt->ts = incLamport();
+    pkt->priority = my_priority;
     MPI_Send( pkt, 1, MPI_PAKIET_T, destination, tag, MPI_COMM_WORLD);
     if (freepkt) free(pkt);
 }
@@ -157,11 +166,28 @@ void changeState( conan_state newState )
     pthread_mutex_unlock( &stateMut );
 }
 
+void changeLibrarianState( librarian_state newState )
+{
+    pthread_mutex_lock( &stateMut );
+    if (l_stan==Exit) { 
+	pthread_mutex_unlock( &stateMut );
+        return;
+    }
+    l_stan = newState;
+    pthread_mutex_unlock( &stateMut );
+}
+
 int main(int argc, char **argv)
 {
     /* Tworzenie wątków, inicjalizacja itp */
     inicjuj(&argc,&argv); // tworzy wątek komunikacyjny w "watek_komunikacyjny.c"
-    mainLoop();          // w pliku "watek_glowny.c"
+    if (rank < BIBLIOTEKARZE)
+    {
+        librarianMainLoop();
+    } else {
+        conanMainLoop();
+    }
+             // w pliku "watek_glowny.c"
 
     finalizuj();
     return 0;

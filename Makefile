@@ -17,7 +17,7 @@ run: main
 	mpirun -np 8 ./main
 
 send:
-	scp -r ../conan inf$(IDX)@polluks.cs.put.poznan.pl:~/mpi
+	scp -r ../cONAN inf$(IDX)@polluks.cs.put.poznan.pl:~/mpi
 
 get:
-	scp -r inf$(IDX)@polluks.cs.put.poznan.pl:~/mpi/conan ..
+	scp -r inf$(IDX)@polluks.cs.put.poznan.pl:~/mpi/cONAN ..
