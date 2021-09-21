@@ -315,8 +315,35 @@ void req_check() {
         queue *tmp = equipmentQueue;
         while(i <= STROJE || tmp == NULL) {
             sendPacket(0, tmp->destination, ACK_EQ);
+            queue *del = tmp;
             tmp = tmp->nextItem;
+            free(del);
         }
         equipmentQueue = tmp;
+    }
+}
+
+//skoro pralnia ma działać podobnie to czemu nie napisać ogólniejszej funkcji?
+void generalized_req_check(queue *q, int *reqs, int resource) {
+    int all_ack_collected = TRUE;
+    for (int i = 0; i < CONANI; i++) {
+        if(reqs[i] == FALSE) {
+            all_ack_collected = FALSE;
+            break;
+        }
+    }
+    if(all_ack_collected) {
+        for (int i = 0; i < CONANI; i++) {
+            reqs[i] = FALSE;
+        }
+        int i = 0;
+        while(i <= resource || q == NULL) {
+            // w warunku do while nie wiem czy nie trzeba odjąć ilości zasobu, którą poprzednimi plebiscytami zdobyliśmy
+            sendPacket(0, q->destination, ACK_EQ);
+            queue *del = q;
+            q = q->nextItem;
+            free(del);
+        }
+        equipmentQueue = q;
     }
 }
