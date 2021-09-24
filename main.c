@@ -17,17 +17,21 @@ conan_state stan=Ready;
 librarian_state l_stan=Preparing;
 volatile char end = FALSE;
 int size,rank; /* nie trzeba zerować, bo zmienna globalna statyczna */
-int my_priority = 0;
+int my_priority;
 int zlecenie_dla;
+int sent_eq_acks;
+int sent_laundry_acks;
 int zlecenia[BIBLIOTEKARZE];
 int zebrane_ack[CONANI];
 int zebrane_eq_req[CONANI];
 int zebrane_eq_ack[CONANI];
+int zebrane_laundry_req[CONANI];
+int zebrane_laundry_ack[CONANI];
 MPI_Datatype MPI_PAKIET_T;
 pthread_t threadKom, threadMon;
 
 pthread_mutex_t stateMut = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t tallowMut = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t washMut = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t lamportMut = PTHREAD_MUTEX_INITIALIZER;
 
 int incLamport() {
@@ -114,7 +118,7 @@ void inicjuj(int *argc, char ***argv)
         pthread_create( &threadKom, NULL, conanCommunicationThread, 0);
     }
     if (rank==0) {
-	pthread_create( &threadMon, NULL, startMonitor, 0);
+	    pthread_create( &threadMon, NULL, startMonitor, 0);
     }
     debug("jestem");
 }
@@ -183,6 +187,38 @@ void changeLibrarianState( librarian_state newState )
     }
     l_stan = newState;
     pthread_mutex_unlock( &stateMut );
+}
+
+void *wash() {
+    sleep(7);
+    pthread_mutex_lock(&washMut);
+    if(equipmentQueue != NULL) {
+        sendPacket(0, equipmentQueue->destination, ACK_EQ);
+        debug("Sent ACK_EQ");
+    } else sent_eq_acks--;
+    if(laundryQueue != NULL) {
+        sendPacket(0, laundryQueue->destination, ACK_LAUNDRY);
+        debug("Sent ACK_LAUNDRY");
+    } else sent_laundry_acks--;
+    pthread_mutex_unlock( &washMut );
+    debug("Washing handled");
+}
+
+void sendMutedAck(int dest, int tag, int *acks) {
+    pthread_mutex_lock(&washMut);
+    (*acks)++;
+    sendPacket(0, dest, tag);
+    debug("Sent ACK %d to %d", tag, dest);
+    pthread_mutex_unlock( &washMut );
+}
+
+void collect_laundry() {
+    pthread_mutex_lock(&washMut);
+    //sent_laundry_acks -= rzeczy_do_odebrania;
+    //sent_eq_acks -= rzeczy_do_odebrania;
+    //rzeczy_do_odebrania = 0;
+    //useless
+    pthread_mutex_unlock( &washMut );
 }
 
 int main(int argc, char **argv)

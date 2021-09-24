@@ -3,6 +3,7 @@
 #include "main.h"
 
 queue* equipmentQueue;
+queue* laundryQueue;
 
 void clearAcks() {
     for (int i = 0; i < CONANI; i++)
@@ -17,6 +18,12 @@ void clearEqAcks() {
     }
 }
 
+void generalizedClearAcks(int *array_to_clear) {
+    for (int i = 0; i < CONANI; i++) {
+        array_to_clear[i] = (i == rank - BIBLIOTEKARZE) ? TRUE : FALSE;    
+    }
+}
+
 void sendAckErrandPacket(int dest, int errand) {
     packet_t packet;
     packet.data = errand;
@@ -25,7 +32,8 @@ void sendAckErrandPacket(int dest, int errand) {
 }
 
 void startCollectingEq() {
-    clearEqAcks();
+    //clearEqAcks();
+    generalizedClearAcks(zebrane_eq_ack);
     packet_t packet;
     packet.data = zlecenie_dla;
     debug("Started collecting EQ for errand %d", zlecenie_dla);
@@ -38,11 +46,23 @@ void startCollectingEq() {
     
 }
 
+void startLaundry() {
+    generalizedClearAcks(zebrane_laundry_ack);
+    debug("Started laundry");
+    for (int i = BIBLIOTEKARZE; i < size; i++)
+    {
+        if (i != rank) {
+            sendPacket(0, i, REQ_LAUNDRY);
+        }
+    }
+}
+
 void tryCompetingForErrandFromList() {
     zlecenia[zlecenie_dla] = TAKEN;
     zlecenie_dla = -1;
     
-    clearAcks();
+    //clearAcks();
+    generalizedClearAcks(zebrane_ack);
     int flag = TRUE;
     for (int i = 0; i < BIBLIOTEKARZE; i++)
     {
@@ -70,6 +90,32 @@ void tryCompetingForErrandFromList() {
         changeState(Ready);
 }
 
+//skoro pralnia ma działać podobnie to czemu nie napisać ogólniejszej funkcji?
+queue* generalized_req_check(queue *q, int *reqs, int *acks, int resource, int tag) {
+    int all_ack_collected = TRUE;
+    for (int i = 0; i < CONANI; i++) {
+        if(reqs[i] == FALSE) {
+            all_ack_collected = FALSE;
+            break;
+        }
+    }
+    if(all_ack_collected) {
+        for (int i = 0; i < CONANI; i++) {
+            reqs[i] = FALSE;
+        }
+        while(*acks < resource && q != NULL) {
+            // (*acks)++;
+            // sendPacket(0, q->destination, tag);
+            sendMutedAck(q->destination, tag, acks);
+            queue *del = q;
+            q = q->nextItem;
+            free(del);
+        }
+    }
+    return q;
+}
+
+
 void *conanCommunicationThread(void *ptr) {
     MPI_Status status;
     packet_t packet;
@@ -92,7 +138,8 @@ void *conanCommunicationThread(void *ptr) {
                             debug("Received errand from librarian %d", packet.src);
                             packet.data = packet.src;
                             zlecenie_dla = packet.src;
-                            clearAcks();
+                            //clearAcks();
+                            generalizedClearAcks(zebrane_ack);
                             for (int i = BIBLIOTEKARZE; i < size; i++) {
                                 if(i != rank) {
                                     zlecenia[zlecenie_dla] = TRUE;
@@ -122,7 +169,8 @@ void *conanCommunicationThread(void *ptr) {
                                 zlecenia[packet.data] != TAKEN) {
                                 changeState(CompeteForErrand);
                                 debug("Started competing for errand %d from REQ_ERRAND received from %d", packet.data, packet.src);
-                                clearAcks();
+                                //clearAcks();
+                                generalizedClearAcks(zebrane_ack);
                                 for (int i = BIBLIOTEKARZE; i < size; i++) {
                                     if(i != rank) {
                                         zlecenia[packet.data] = TRUE;
@@ -212,8 +260,8 @@ void *conanCommunicationThread(void *ptr) {
                             } else {
                                 forwardPacket(&packet, rank, ACK_ERRAND);
                             }
-                            debug("Sent ACK_EQ to %d", packet.src);
-                            sendPacket(0, packet.src, ACK_EQ);
+                            //debug("Sent ACK_EQ to %d", packet.src);
+                            sendingAckHandler(packet, equipmentQueue, &sent_eq_acks, STROJE, ACK_EQ);
                             break;
                         case CollectingEq:
                             if (equipmentQueue == NULL) {
@@ -241,10 +289,11 @@ void *conanCommunicationThread(void *ptr) {
                                 }
                             }
                             zebrane_eq_req[packet.src - BIBLIOTEKARZE] = TRUE;
-                            req_check();
+                            //req_check();
+                            equipmentQueue = generalized_req_check(equipmentQueue, zebrane_eq_req, &sent_eq_acks, STROJE, ACK_EQ);
                             break;
                         default:
-                            sendPacket(0, packet.src, ACK_EQ);
+                            sendingAckHandler(packet, equipmentQueue, &sent_eq_acks, STROJE, ACK_EQ);
                             break;
                         // nie będę oszukiwał, te priorytety to istotna zabawka, która może nam coś spier............. zepsuć (:
                         // nie wiem też czy wszystko co trzeba
@@ -255,7 +304,8 @@ void *conanCommunicationThread(void *ptr) {
                             debug("Received ACK_EQ from %d", packet.src);
                             zebrane_eq_req[packet.src - BIBLIOTEKARZE] = TRUE;
                             zebrane_eq_ack[packet.src - BIBLIOTEKARZE] = TRUE;
-                            req_check();
+                            //req_check();
+                            equipmentQueue = generalized_req_check(equipmentQueue, zebrane_eq_req, &sent_eq_acks, STROJE, ACK_EQ);
                             int all_ack_collected = TRUE;
                             for (int i = 0; i < CONANI; i++) {
                                 if(zebrane_eq_ack[i] == FALSE) {
@@ -274,10 +324,79 @@ void *conanCommunicationThread(void *ptr) {
                             }
                     }
                     break;
+                case REQ_LAUNDRY:
+                    switch(stan) {
+                        case Laundry:
+                            if (laundryQueue == NULL) {
+                                laundryQueue = malloc(sizeof(queue));
+                                if (laundryQueue == NULL) {
+                                    //coś się zepsuło, handling błędów kiedy indziej XD
+                                    exit(284829);
+                                }
+                                laundryQueue->destination = packet.src;
+                                laundryQueue->priority = packet.priority;
+                                laundryQueue->nextItem = NULL;
+                            } else {
+                                queue *tmp = laundryQueue;
+                                while (tmp != NULL) {
+                                    if(packet.priority < tmp->priority) {
+                                        queue* swap = malloc(sizeof(queue));
+                                        swap->destination = tmp->destination;
+                                        swap->nextItem = tmp->nextItem;
+                                        swap->priority = tmp->priority;
+                                        tmp->destination = packet.src;
+                                        tmp->nextItem = swap;
+                                        tmp->priority = packet.priority;
+                                        break;
+                                    } else tmp = tmp->nextItem;
+                                }
+                            }
+                            zebrane_laundry_req[packet.src - BIBLIOTEKARZE] = TRUE;
+                            laundryQueue = generalized_req_check(laundryQueue, zebrane_laundry_req, &sent_laundry_acks, PRALNIA, ACK_LAUNDRY);
+                            break;
+                        default:
+                            sendingAckHandler(packet, laundryQueue, &sent_laundry_acks, PRALNIA, ACK_LAUNDRY);
+                            break;
+                    }
+                    break;
+                case ACK_LAUNDRY:
+                    switch (stan) {
+                        case Laundry:
+                            debug("Received ACK_LAUNDRY from %d", packet.src);
+                            zebrane_laundry_req[packet.src - BIBLIOTEKARZE] = TRUE;
+                            zebrane_laundry_ack[packet.src - BIBLIOTEKARZE] = TRUE;
+                            laundryQueue = generalized_req_check(laundryQueue, zebrane_laundry_req, &sent_laundry_acks, PRALNIA, ACK_LAUNDRY);
+                            int all_ack_collected = TRUE;
+                            for (int i = 0; i < CONANI; i++) {
+                                if(zebrane_laundry_ack[i] == FALSE) {
+                                    all_ack_collected = FALSE;
+                                    break;
+                                }
+                            }
+                            if(all_ack_collected) {
+                                for (int i = 0; i < CONANI; i++) {
+                                    zebrane_laundry_req[i] = FALSE;
+                                    zebrane_laundry_ack[i] = FALSE;
+                                }
+                                debug("Collected ACK_LAUNDRY from everyone.");
+                                pthread_t washing;
+                                pthread_create(&washing, NULL, wash, 0);
+                                changeState(Ready);
+                            }
+                    }
+                    break;
                 case ACK_LIB:
                     my_priority -= 1; 
-                    changeState(Ready);
-                    
+                    changeState(ReturnEq);
+                    // if(rzeczy_do_odebrania) {
+                    //     queuePacketSend(laundryQueue, ACK_LAUNDRY, &sent_laundry_acks, PRALNIA);
+                    //     queuePacketSend(equipmentQueue, ACK_EQ, &sent_eq_acks, STROJE);
+                    //     collect_laundry();
+                    //     debug("Returned eq and freed laundry.");
+                    // }
+                    //never ask what happend in meantime, if you know - you know, if you don't - you don't
+                    changeState(Laundry);
+                    startLaundry();
                     break;
                 case END_INTERNAL:
                     switch (stan)
@@ -292,7 +411,6 @@ void *conanCommunicationThread(void *ptr) {
                         break;
                     }
                     break;
-                    
             }
         sleep(1);
     }
@@ -313,7 +431,8 @@ void req_check() {
         }
         int i = 0;
         queue *tmp = equipmentQueue;
-        while(i <= STROJE || tmp == NULL) {
+        while(sent_eq_acks <= STROJE || tmp != NULL) {
+            sent_eq_acks++;
             sendPacket(0, tmp->destination, ACK_EQ);
             queue *del = tmp;
             tmp = tmp->nextItem;
@@ -323,27 +442,54 @@ void req_check() {
     }
 }
 
-//skoro pralnia ma działać podobnie to czemu nie napisać ogólniejszej funkcji?
-void generalized_req_check(queue *q, int *reqs, int resource) {
-    int all_ack_collected = TRUE;
-    for (int i = 0; i < CONANI; i++) {
-        if(reqs[i] == FALSE) {
-            all_ack_collected = FALSE;
-            break;
+
+void queuePacketSend(queue* q, int tag, int *acks, int resource) {
+    while(*acks < resource && q != NULL) {
+        // (*acks)++;
+        // sendPacket(0, q->destination, tag);
+        sendMutedAck(q->destination, tag, acks);
+        queue *del = q;
+        q = q->nextItem;
+        free(del);
         }
-    }
-    if(all_ack_collected) {
-        for (int i = 0; i < CONANI; i++) {
-            reqs[i] = FALSE;
+}
+
+void sendingAckHandler(packet_t packet, queue *q, int *acks, int resource, int tag) {
+    if(*acks < resource && q == NULL) {
+        // (*acks)++;
+        // sendPacket(0, packet.src, tag);
+        sendMutedAck(packet.src, tag, acks);
+    } else if (*acks < resource && q != NULL) {
+        while (q != NULL) {
+            if(packet.priority < q->priority) {
+                queue* swap = malloc(sizeof(queue));
+                swap->destination = q->destination;
+                swap->nextItem = q->nextItem;
+                swap->priority = q->priority;
+                q->destination = packet.src;
+                q->nextItem = swap;
+                q->priority = packet.priority;
+                break;
+            } else q = q->nextItem;
         }
-        int i = 0;
-        while(i <= resource || q == NULL) {
-            // w warunku do while nie wiem czy nie trzeba odjąć ilości zasobu, którą poprzednimi plebiscytami zdobyliśmy
-            sendPacket(0, q->destination, ACK_EQ);
-            queue *del = q;
-            q = q->nextItem;
-            free(del);
+        // (*acks)++;
+        // sendPacket(0, q->destination, tag);
+        sendMutedAck(q->destination, tag, acks);
+        queue *del = q;
+        q = q->nextItem;
+        free(del);
+    } else {
+        while (q != NULL) {
+            if(packet.priority < q->priority) {
+                queue* swap = malloc(sizeof(queue));
+                swap->destination = q->destination;
+                swap->nextItem = q->nextItem;
+                swap->priority = q->priority;
+                q->destination = packet.src;
+                q->nextItem = swap;
+                q->priority = packet.priority;
+                break;
+            } else q = q->nextItem;
         }
-        equipmentQueue = q;
     }
 }

@@ -2,6 +2,7 @@
 #include "conan_main.h"
 #include "conan_communication.h"
 #include "conan_state.h"
+#include <pthread.h>
 
 void conanMainLoop() {
     MPI_Status status;
@@ -17,7 +18,6 @@ void conanMainLoop() {
             debug("Started executing errand");
             sendPacket(0, rank, END_INTERNAL);
             break;
-        
         case FinishErrand:
             sendPacket(0, zlecenie_dla, REQ_LIB);
             break;

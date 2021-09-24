@@ -37,10 +37,14 @@ extern int rank;
 extern int size;
 extern int my_priority;
 extern int zlecenie_dla;
+extern int sent_eq_acks;
+extern int sent_laundry_acks;
 extern int zlecenia[BIBLIOTEKARZE];
 extern int zebrane_ack[CONANI];
 extern int zebrane_eq_req[CONANI];
 extern int zebrane_eq_ack[CONANI]; // wydaję mi się, że dwie struktury są potrzebne, bo dopiero po zebraniu od wszystkich ACK LUB REQ my wysyłamy ACK i w jednej strukturze by się psuło, bo żeby przejść dalej musimy wiedzieć, że dostaliśmy od wszystkich WYŁĄCZNIE ACK (za długa linia, wiem, bujaj się)
+extern int zebrane_laundry_req[CONANI];
+extern int zebrane_laundry_ack[CONANI];
 
 extern int lamport;
 int incLamport();
@@ -117,4 +121,7 @@ void sendPacket(packet_t *pkt, int destination, int tag);
 void forwardPacket(packet_t *pkt, int destination, int tag);
 void changeState( conan_state );
 void changeLibrarianState( librarian_state newState );
+void *wash();
+void collect_laundry();
+void sendMutedAck(int dest, int tag, int *acks);
 #endif
