@@ -121,7 +121,7 @@ void sendPacket(packet_t *pkt, int destination, int tag);
 void forwardPacket(packet_t *pkt, int destination, int tag);
 void changeState( conan_state );
 void changeLibrarianState( librarian_state newState );
-void *wash();
+void *washV2();
 void collect_laundry();
 void sendMutedAck(int dest, int tag, int *acks);
 #endif

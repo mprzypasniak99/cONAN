@@ -189,15 +189,43 @@ void changeLibrarianState( librarian_state newState )
     pthread_mutex_unlock( &stateMut );
 }
 
+void *washV2() {
+    sleep(7);
+    debug("Washing ended");
+    pthread_mutex_lock(&washMut);
+    while(equipmentQueue != NULL) {
+        sendPacket(0, equipmentQueue->destination, ACK_EQ);
+        debug("ACK_EQ sent to %d", equipmentQueue->destination);
+        queue *del = equipmentQueue;
+        equipmentQueue = equipmentQueue->nextItem;
+        free(del);
+    }
+    while(laundryQueue != NULL) {
+        sendPacket(0, laundryQueue->destination, ACK_LAUNDRY);
+        debug("ACK_LAUNDRY sent to %d", laundryQueue->destination);
+        queue *del = laundryQueue;
+        laundryQueue = laundryQueue->nextItem;
+        free(del);
+    }
+    debug("Washing handled");
+    pthread_mutex_unlock( &washMut );
+}
+
 void *wash() {
     sleep(7);
     pthread_mutex_lock(&washMut);
     if(equipmentQueue != NULL) {
         sendPacket(0, equipmentQueue->destination, ACK_EQ);
+        queue *del = equipmentQueue;
+        equipmentQueue = equipmentQueue->nextItem;
+        free(del);
         debug("Sent ACK_EQ");
     } else sent_eq_acks--;
     if(laundryQueue != NULL) {
         sendPacket(0, laundryQueue->destination, ACK_LAUNDRY);
+        queue *del = laundryQueue;
+        laundryQueue = laundryQueue->nextItem;
+        free(del);
         debug("Sent ACK_LAUNDRY");
     } else sent_laundry_acks--;
     pthread_mutex_unlock( &washMut );
