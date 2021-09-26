@@ -20,7 +20,7 @@
 
 #define BIBLIOTEKARZE 2
 #define CONANI 6
-#define PRALNIA 2
+#define PRALNIA 1
 #define STROJE 2
 
 /* używane w wątku głównym, determinuje jak często i na jak długo zmieniają się stany */

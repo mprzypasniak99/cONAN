@@ -40,11 +40,16 @@ void deleteFromQueue(queue** q, int dest) {
     queue* tmp = *q;
     queue* del = NULL;
 
-    while (tmp != NULL && tmp->nextItem != NULL) {
-        if (tmp->nextItem->destination = dest) {
-            del = tmp->nextItem;
-            tmp->nextItem = del->nextItem;
-            break;
+    if (tmp->destination == dest) {
+        del = tmp;
+        *q = tmp->nextItem;
+    } else {
+        while (tmp != NULL && tmp->nextItem != NULL) {
+            if (tmp->nextItem->destination = dest) {
+                del = tmp->nextItem;
+                tmp->nextItem = del->nextItem;
+                break;
+            }
         }
     }
 

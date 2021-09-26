@@ -80,7 +80,7 @@ void tryCompetingForErrandFromList() {
                     packet.data = i;
                     packet.priority = my_priority;
                     sendPacket(&packet, j, REQ_ERRAND);
-                    //debug("Sent REQ_ERRAND to %d for errand %d", j, packet.data);
+                    debug("Sent REQ_ERRAND to %d for errand %d", j, packet.data);
                 }
             }
             break;
@@ -108,7 +108,7 @@ queue* generalizedReqCheckV2(queue *q, int *reqs, int *acks, int resource, int t
         while(q != NULL && sent < resource) {
             //if(q == NULL || sent == resource) return q;
             if(q->destination == rank) flag = TRUE;
-            debug("Why the fuck you're sending this %d to %d? Sent: %d, flag: %d", rank, q->destination, sent, flag);
+            //debug("Why the fuck you're sending this %d to %d? Sent: %d, flag: %d", rank, q->destination, sent, flag);
             sendMutedAck(q->destination, tag, acks);
             if(flag) ++sent;
             q = q->nextItem;
@@ -208,7 +208,7 @@ void *conanCommunicationThread(void *ptr) {
         MPI_Recv(&packet, 1, MPI_PAKIET_T, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
 
         setMaxLamport(packet.ts);
-        //debug("Received %d tag during state %d", status.MPI_TAG, stan);
+        debug("Received %d tag during state %d", status.MPI_TAG, stan);
         switch(status.MPI_TAG) {
                 case FINISH:
                     changeState(Exit);
@@ -228,7 +228,7 @@ void *conanCommunicationThread(void *ptr) {
                                 if(i != rank) {
                                     zlecenia[zlecenie_dla] = TRUE;
                                     sendPacket(&packet, i, REQ_ERRAND);
-                                    //debug("Sent REQ_ERRAND to %d for errand %d", i, packet.data);
+                                    debug("Sent REQ_ERRAND to %d for errand %d", i, packet.data);
                                 }
                             }
                             break;
@@ -246,7 +246,7 @@ void *conanCommunicationThread(void *ptr) {
                     }
                     break;
                 case REQ_ERRAND:
-                    //debug("Received REQ_ERRAND from %d for errand %d", packet.src, packet.data);
+                    debug("Received REQ_ERRAND from %d for errand %d", packet.src, packet.data);
                     switch (stan) {
                         case Ready:
                             if((packet.priority < my_priority || (packet.priority == my_priority && packet.src > rank)) &&
@@ -260,20 +260,20 @@ void *conanCommunicationThread(void *ptr) {
                                         zlecenia[packet.data] = TRUE;
                                         zlecenie_dla = packet.data;
                                         sendPacket(&packet, i, REQ_ERRAND);
-                                        //debug("Sent REQ_ERRAND to %d for errand %d", i, packet.data);
+                                        debug("Sent REQ_ERRAND to %d for errand %d", i, packet.data);
                                     }
                                 }
                             } else {
                                 zlecenia[packet.data] = TAKEN;
                                 sendAckErrandPacket(packet.src, packet.data);
-                                //debug("Sent ACK_ERRAND to %d for errand %d due to higher priority REQ", packet.src, packet.data);
+                                debug("Sent ACK_ERRAND to %d for errand %d due to higher priority REQ", packet.src, packet.data);
                             }
                             break;
                         case CompeteForErrand:
                             if(packet.data == zlecenie_dla) {
                                 if(packet.priority > my_priority || (packet.priority == my_priority && packet.src < rank)) {
                                     sendAckErrandPacket(packet.src, packet.data);
-                                    //debug("Sent ACK_ERRAND to %d for errand %d", packet.src, packet.data);
+                                    debug("Sent ACK_ERRAND to %d for errand %d", packet.src, packet.data);
 
                                     tryCompetingForErrandFromList();
                                 }
@@ -285,7 +285,7 @@ void *conanCommunicationThread(void *ptr) {
                                         zlecenia[packet.data] = FALSE;
                                     }
                                     sendAckErrandPacket(packet.src, packet.data);
-                                    //debug("Sent ACK_ERRAND to %d for errand %d", packet.src, packet.data);
+                                    debug("Sent ACK_ERRAND to %d for errand %d", packet.src, packet.data);
                                 } else {
                                     if (zlecenia[packet.data] != TAKEN) 
                                     {
@@ -344,6 +344,7 @@ void *conanCommunicationThread(void *ptr) {
                             if (packet.data == zlecenie_dla) {
                                 tryCompetingForErrandFromList();
                             } else {
+                                zlecenia[packet.data] = TAKEN;
                                 forwardPacket(&packet, rank, ACK_ERRAND);
                             }
                             //debug("Sent ACK_EQ to %d", packet.src);
@@ -487,7 +488,7 @@ void *conanCommunicationThread(void *ptr) {
                 case ACK_EQ:
                     switch (stan) {
                         case CollectingEq:
-                            debug("Received ACK_EQ from %d", packet.src);
+                            //debug("Received ACK_EQ from %d", packet.src);
                             zebrane_eq_req[packet.src - BIBLIOTEKARZE] = TRUE;
                             zebrane_eq_ack[packet.src - BIBLIOTEKARZE] = TRUE;
                             //req_check();
@@ -504,7 +505,7 @@ void *conanCommunicationThread(void *ptr) {
                                     zebrane_eq_req[i] = FALSE;
                                     zebrane_eq_ack[i] = FALSE;
                                 }
-                                debug("Collected ACK_EQ from everyone. Starting execution");
+                                //debug("Collected ACK_EQ from everyone. Starting execution");
                                 changeState(Executing);
                                 sendPacket(0, rank, START_INTERNAL);
                             }
@@ -603,7 +604,7 @@ void *conanCommunicationThread(void *ptr) {
                 case ACK_LAUNDRY:
                     switch (stan) {
                         case Laundry:
-                            debug("Received ACK_LAUNDRY from %d", packet.src);
+                            //debug("Received ACK_LAUNDRY from %d", packet.src);
                             zebrane_laundry_req[packet.src - BIBLIOTEKARZE] = TRUE;
                             zebrane_laundry_ack[packet.src - BIBLIOTEKARZE] = TRUE;
                             laundryQueue = generalizedReqCheckV2(laundryQueue, zebrane_laundry_req, &sent_laundry_acks, PRALNIA, ACK_LAUNDRY);
@@ -619,7 +620,7 @@ void *conanCommunicationThread(void *ptr) {
                                     zebrane_laundry_req[i] = FALSE;
                                     zebrane_laundry_ack[i] = FALSE;
                                 }
-                                debug("Collected ACK_LAUNDRY from everyone.");
+                                //debug("Collected ACK_LAUNDRY from everyone.");
                                 pthread_t washing;
                                 pthread_create(&washing, NULL, washV2, 0);
                                 changeState(Ready);
@@ -644,7 +645,7 @@ void *conanCommunicationThread(void *ptr) {
                     {
                     case Executing:
                         changeState(FinishErrand);
-                        debug("Trying to confirm end of errand from librarian %d", zlecenie_dla);
+                        //debug("Trying to confirm end of errand from librarian %d", zlecenie_dla);
                         sendPacket(0, rank, START_INTERNAL);
                         break;
                     
