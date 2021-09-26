@@ -113,6 +113,7 @@ queue* generalizedReqCheckV2(queue *q, int *reqs, int *acks, int resource, int t
             if(flag) ++sent;
             q = q->nextItem;
         }
+        *acks = sent;
     }
     return q;
 }
@@ -347,7 +348,48 @@ void *conanCommunicationThread(void *ptr) {
                             }
                             //debug("Sent ACK_EQ to %d", packet.src);
                             //equipmentQueue = sendingAckHandler(packet, equipmentQueue, &sent_eq_acks, STROJE, ACK_EQ);
-                            sendMutedAck(packet.src, ACK_EQ, &sent_eq_acks);
+                            if (sent_eq_acks) {
+                                if(sent_eq_acks < STROJE) {
+                                    sent_eq_acks++;
+                                    sendMutedAck(packet.src, ACK_EQ, &sent_eq_acks);
+                                } else {
+                                    if (equipmentQueue == NULL) {
+                                        equipmentQueue = malloc(sizeof(queue));
+                                        if (equipmentQueue == NULL) {
+                                            //coś się zepsuło, handling błędów kiedy indziej XD
+                                            exit(284829);
+                                        }
+                                        equipmentQueue->destination = packet.src;
+                                        equipmentQueue->priority = packet.priority;
+                                        equipmentQueue->nextItem = NULL;
+                                    } else {
+                                        queue *tmp = equipmentQueue;
+                                        while (tmp != NULL) {
+                                            if(packet.priority < tmp->priority) {
+                                                queue* swap = malloc(sizeof(queue));
+                                                swap->destination = tmp->destination;
+                                                swap->nextItem = tmp->nextItem;
+                                                swap->priority = tmp->priority;
+                                                tmp->destination = packet.src;
+                                                tmp->nextItem = swap;
+                                                tmp->priority = packet.priority;
+                                                break;
+                                            } else {
+                                                if(tmp->nextItem != NULL) {
+                                                    tmp = tmp->nextItem;
+                                                } else {
+                                                    queue* swap = malloc(sizeof(queue));
+                                                    swap->destination = packet.src;
+                                                    swap->nextItem = NULL;
+                                                    swap->priority = packet.priority;
+                                                    tmp->nextItem = swap;
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                             break;
                         case CollectingEq:
                             if (equipmentQueue == NULL) {
@@ -391,7 +433,48 @@ void *conanCommunicationThread(void *ptr) {
                             break;
                         default:
                             //equipmentQueue = sendingAckHandler(packet, equipmentQueue, &sent_eq_acks, STROJE, ACK_EQ);
-                            sendMutedAck(packet.src, ACK_EQ, &sent_eq_acks);
+                            if (sent_eq_acks) {
+                                if(sent_eq_acks < STROJE) {
+                                    sent_eq_acks++;
+                                    sendMutedAck(packet.src, ACK_EQ, &sent_eq_acks);
+                                } else {
+                                    if (equipmentQueue == NULL) {
+                                        equipmentQueue = malloc(sizeof(queue));
+                                        if (equipmentQueue == NULL) {
+                                            //coś się zepsuło, handling błędów kiedy indziej XD
+                                            exit(284829);
+                                        }
+                                        equipmentQueue->destination = packet.src;
+                                        equipmentQueue->priority = packet.priority;
+                                        equipmentQueue->nextItem = NULL;
+                                    } else {
+                                        queue *tmp = equipmentQueue;
+                                        while (tmp != NULL) {
+                                            if(packet.priority < tmp->priority) {
+                                                queue* swap = malloc(sizeof(queue));
+                                                swap->destination = tmp->destination;
+                                                swap->nextItem = tmp->nextItem;
+                                                swap->priority = tmp->priority;
+                                                tmp->destination = packet.src;
+                                                tmp->nextItem = swap;
+                                                tmp->priority = packet.priority;
+                                                break;
+                                            } else {
+                                                if(tmp->nextItem != NULL) {
+                                                    tmp = tmp->nextItem;
+                                                } else {
+                                                    queue* swap = malloc(sizeof(queue));
+                                                    swap->destination = packet.src;
+                                                    swap->nextItem = NULL;
+                                                    swap->priority = packet.priority;
+                                                    tmp->nextItem = swap;
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                             break;
                         // nie będę oszukiwał, te priorytety to istotna zabawka, która może nam coś spier............. zepsuć (:
                         // nie wiem też czy wszystko co trzeba
@@ -466,7 +549,48 @@ void *conanCommunicationThread(void *ptr) {
                             break;
                         default:
                             //laundryQueue = sendingAckHandler(packet, laundryQueue, &sent_laundry_acks, PRALNIA, ACK_LAUNDRY);
-                            sendMutedAck(packet.src, ACK_LAUNDRY, &sent_laundry_acks);
+                            if (sent_laundry_acks) {
+                                if(sent_laundry_acks < PRALNIA) {
+                                    sent_laundry_acks++;
+                                    sendMutedAck(packet.src, ACK_LAUNDRY, &sent_laundry_acks);
+                                } else {
+                                    if (laundryQueue == NULL) {
+                                        laundryQueue = malloc(sizeof(queue));
+                                        if (laundryQueue == NULL) {
+                                            //coś się zepsuło, handling błędów kiedy indziej XD
+                                            exit(284829);
+                                        }
+                                        laundryQueue->destination = packet.src;
+                                        laundryQueue->priority = packet.priority;
+                                        laundryQueue->nextItem = NULL;
+                                    } else {
+                                        queue *tmp = laundryQueue;
+                                        while (tmp != NULL) {
+                                            if(packet.priority < tmp->priority) {
+                                                queue* swap = malloc(sizeof(queue));
+                                                swap->destination = tmp->destination;
+                                                swap->nextItem = tmp->nextItem;
+                                                swap->priority = tmp->priority;
+                                                tmp->destination = packet.src;
+                                                tmp->nextItem = swap;
+                                                tmp->priority = packet.priority;
+                                                break;
+                                            } else {
+                                                if(tmp->nextItem != NULL) {
+                                                    tmp = tmp->nextItem;
+                                                } else {
+                                                    queue* swap = malloc(sizeof(queue));
+                                                    swap->destination = packet.src;
+                                                    swap->nextItem = NULL;
+                                                    swap->priority = packet.priority;
+                                                    tmp->nextItem = swap;
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                             break;
                     }
                     break;
