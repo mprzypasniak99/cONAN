@@ -207,6 +207,8 @@ void *washV2() {
         laundryQueue = laundryQueue->nextItem;
         free(del);
     }
+    sent_eq_acks = 0;
+    sent_laundry_acks = 0;
     debug("Washing handled");
     pthread_mutex_unlock( &washMut );
 }
