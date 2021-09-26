@@ -434,6 +434,8 @@ void *conanCommunicationThread(void *ptr) {
                             //req_check();
                             equipmentQueue = generalizedReqCheckV2(equipmentQueue, zebrane_eq_req, &sent_eq_acks, STROJE, ACK_EQ);
                             break;
+                        case Ready:
+                            zlecenia[packet.data] == TAKEN;
                         default:
                             //equipmentQueue = sendingAckHandler(packet, equipmentQueue, &sent_eq_acks, STROJE, ACK_EQ);
                             if (sent_eq_acks) {
@@ -638,6 +640,10 @@ void *conanCommunicationThread(void *ptr) {
                     // }
                     //never ask what happend in meantime, if you know - you know, if you don't - you don't
                     changeState(Laundry);
+
+                    zlecenia[zlecenie_dla] = FALSE;
+                    zlecenie_dla = -1;
+
                     startLaundry();
                     break;
                 case END_INTERNAL:
