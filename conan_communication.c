@@ -389,6 +389,8 @@ void *conanCommunicationThread(void *ptr) {
                                         }
                                     }
                                 }
+                            } else {
+                                sendMutedAck(packet.src, ACK_EQ, &sent_eq_acks);
                             }
                             break;
                         case CollectingEq:
@@ -474,6 +476,8 @@ void *conanCommunicationThread(void *ptr) {
                                         }
                                     }
                                 }
+                            } else {
+                                sendMutedAck(packet.src, ACK_EQ, &sent_eq_acks);
                             }
                             break;
                         // nie będę oszukiwał, te priorytety to istotna zabawka, która może nam coś spier............. zepsuć (:
@@ -590,6 +594,8 @@ void *conanCommunicationThread(void *ptr) {
                                         }
                                     }
                                 }
+                            } else {
+                                sendMutedAck(packet.src, ACK_LAUNDRY, &sent_laundry_acks);
                             }
                             break;
                     }

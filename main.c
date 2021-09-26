@@ -236,7 +236,7 @@ void *wash() {
 
 void sendMutedAck(int dest, int tag, int *acks) {
     pthread_mutex_lock(&washMut);
-    (*acks)++;
+    //(*acks)++;
     sendPacket(0, dest, tag);
     debug("Sent ACK %d to %d", tag, dest);
     pthread_mutex_unlock( &washMut );
