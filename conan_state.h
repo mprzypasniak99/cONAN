@@ -8,7 +8,7 @@ typedef enum {  Ready, CompeteForErrand, CollectingEq, Executing,
 
 extern conan_state conanState;
 
-extern queue* errandQueue;
+//extern queue* errandQueue;
 extern queue* equipmentQueue;
 extern queue* laundryQueue;
 

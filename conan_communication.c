@@ -1,7 +1,50 @@
 #include "conan_communication.h"
 #include "conan_state.h"
 #include "main.h"
+// --------------------------------------------------------------------
+typedef struct queueV2
+{
+    int destination;
+    int priority;
+    int librarian;
+    struct queueV2* nextItem;
+} queueV2;
+queueV2* someQueue = NULL;
+void addToQueueV2(queueV2* q, packet_t packet) {
+    queueV2* swap = malloc(sizeof(queueV2));
+    swap->destination = q->destination;
+    swap->nextItem = q->nextItem;
+    swap->priority = q->priority;
+    swap->librarian = q->librarian;
+    q->destination = packet.src;
+    q->nextItem = swap;
+    q->priority = packet.priority;
+    q->librarian = packet.data;
+}
 
+void sendAcksFromQueue() {
+    while (someQueue != NULL) {
+        debug("This won't ever happen, right?");
+        sendPacket(0, someQueue->destination, ACK_ERRAND);
+        someQueue = someQueue->nextItem;
+    }
+}
+
+queueV2 deleteFromQueueV2(queueV2* q, int lib) {
+    while (q != NULL) {
+        if (q->librarian == lib) {
+            q->destination = q->nextItem->destination;
+            q->librarian = q->nextItem->librarian;
+            q->priority = q->nextItem->priority;
+            queueV2* del = q->nextItem;
+            q->nextItem = q->nextItem->nextItem;
+            free(del);
+        }
+    }
+}
+// --------------------------------------------------------------------
+
+//errand errandQueue[BIBLIOTEKARZE];
 queue* equipmentQueue;
 queue* laundryQueue;
 
@@ -56,11 +99,41 @@ void startLaundry() {
         //}
     }
 }
-
-void tryCompetingForErrandFromList() {
+void tryCompetingForErrandFromList2() {
+    if(zlecenie_dla != -1) {
     zlecenia[zlecenie_dla] = TAKEN;
     zlecenie_dla = -1;
-    
+    }
+    int flag = TRUE;
+    for (int i =0; i < BIBLIOTEKARZE; i++) {
+        if (errandQueue[i].available == TRUE || errandQueue[i].available == TAKEN) {
+            flag = FALSE;
+            debug("Started competing for errand for librarian %d", i);
+
+            packet_t packet;
+             for (int j = BIBLIOTEKARZE; j < size; j++)
+            {
+                zlecenie_dla = i;
+                packet.data = i;
+                packet.errandNum = errandQueue[i].errandNum;
+                if (j != rank)
+                {
+                    debug("Sent REQ_ERRAND to %d for errand %d", j, packet.data);
+                    sendPacket(&packet, j, REQ_ERRAND);
+                }
+            }
+            break;
+        }
+    }
+    if (flag)
+        changeState(Ready);
+}
+
+void tryCompetingForErrandFromList() {
+    if(zlecenie_dla != -1) {
+    zlecenia[zlecenie_dla] = TAKEN;
+    zlecenie_dla = -1;
+    }
     clearAcks();
     //generalizedClearAcks(zebrane_ack);
     int flag = TRUE;
@@ -80,6 +153,7 @@ void tryCompetingForErrandFromList() {
                     packet.data = i;
                     packet.priority = my_priority;
                     sendPacket(&packet, j, REQ_ERRAND);
+                    deleteFromQueueV2(someQueue, i);
                     debug("Sent REQ_ERRAND to %d for errand %d", j, packet.data);
                 }
             }
@@ -208,145 +282,276 @@ void *conanCommunicationThread(void *ptr) {
         MPI_Recv(&packet, 1, MPI_PAKIET_T, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
 
         setMaxLamport(packet.ts);
-        debug("Received %d tag during state %d", status.MPI_TAG, stan);
+        debug("Received %d tag during state %d from %d", status.MPI_TAG, stan, packet.src);
         switch(status.MPI_TAG) {
                 case FINISH:
                     changeState(Exit);
                     debug("Exitting");
                     break;
                 case ERRAND:
-                    switch(stan) {
-                        case Ready:
-                            changeState(CompeteForErrand);
-                            
-                            debug("Received errand from librarian %d", packet.src);
-                            packet.data = packet.src;
-                            zlecenie_dla = packet.src;
+                    debug("Received errand from librarian %d", packet.src);
+                    if(errandQueue[packet.src].errandNum < packet.errandNum) {
+                        debug("Received new errand from librarian %d", packet.src);
+                        errandQueue[packet.src] = (errand){packet.errandNum, TRUE, 0, 0};
+                    }
+                    if (stan == Ready) {
+                        if(errandQueue[packet.src].available == TRUE) {
+                            debug("Started competing for errand for librarian %d", packet.src);
+                            errandQueue[packet.src].ack_destination = rank;
+                            errandQueue[packet.src].priority = my_priority;
                             clearAcks();
-                            //generalizedClearAcks(zebrane_ack);
+                            zlecenie_dla = packet.src;
+                            packet.data = packet.src;
+                            changeState(CompeteForErrand);
                             for (int i = BIBLIOTEKARZE; i < size; i++) {
                                 if(i != rank) {
-                                    zlecenia[zlecenie_dla] = TRUE;
-                                    sendPacket(&packet, i, REQ_ERRAND);
                                     debug("Sent REQ_ERRAND to %d for errand %d", i, packet.data);
+                                    sendPacket2(&packet, i, packet.errandNum, REQ_ERRAND);
                                 }
                             }
-                            break;
-                        case CompeteForErrand:
-                            if(zlecenia[packet.src] != TAKEN) {
-                                zlecenia[packet.src] = TRUE;
-                                debug("Saved errand received from librarian %d", packet.src);
-                            } else {
-                                zlecenia[packet.src] = FALSE;
-                            }
-                            // jeszcze trzeba zadbać, że jeśli dostał wcześniej REQa i odpowiedział ACK, a nie dostał ERRANDA to nie zaznaczy jako TRUE
-                            break;
-                        default:
-                            break;
+                        }
                     }
                     break;
                 case REQ_ERRAND:
-                    debug("Received REQ_ERRAND from %d for errand %d", packet.src, packet.data);
-                    switch (stan) {
+                    if(errandQueue[packet.data].errandNum < packet.errandNum) {
+                        debug("Received new errand from REQ for librarian %d", packet.data);
+                        errandQueue[packet.data] = (errand){packet.errandNum, TRUE, 0, 0};
+                    }
+                    switch (stan){
                         case Ready:
-                            if((packet.priority < my_priority || (packet.priority == my_priority && packet.src > rank)) &&
-                                zlecenia[packet.data] != TAKEN) {
-                                changeState(CompeteForErrand);
-                                debug("Started competing for errand %d from REQ_ERRAND received from %d", packet.data, packet.src);
+                            if ((packet.priority < my_priority || (packet.priority == my_priority && packet.src > rank)) && errandQueue[packet.data].available == TRUE) {
+                                debug("Competeing for ERRAND, my priority is higher.");
+                                errandQueue[packet.data].ack_destination = rank;
+                                errandQueue[packet.data].priority = my_priority;
                                 clearAcks();
-                                //generalizedClearAcks(zebrane_ack);
+                                zlecenie_dla = packet.data;
+                                changeState(CompeteForErrand);
                                 for (int i = BIBLIOTEKARZE; i < size; i++) {
                                     if(i != rank) {
-                                        zlecenia[packet.data] = TRUE;
-                                        zlecenie_dla = packet.data;
-                                        sendPacket(&packet, i, REQ_ERRAND);
                                         debug("Sent REQ_ERRAND to %d for errand %d", i, packet.data);
+                                        sendPacket2(&packet, i, packet.errandNum, REQ_ERRAND);
                                     }
                                 }
                             } else {
-                                zlecenia[packet.data] = TAKEN;
-                                sendAckErrandPacket(packet.src, packet.data);
-                                debug("Sent ACK_ERRAND to %d for errand %d due to higher priority REQ", packet.src, packet.data);
+                                if (errandQueue[packet.data].ack_destination == 0 || (packet.priority > errandQueue[packet.data].priority || (packet.priority == errandQueue[packet.data].priority && packet.src < errandQueue[packet.data].ack_destination))) {
+                                    debug("Higher priority, sendind ACK without trying to compete.")
+                                    errandQueue[packet.data].ack_destination = packet.src;
+                                    errandQueue[packet.data].priority = packet.priority;
+                                    errandQueue[packet.data].available = FALSE;
+                                    sendAckErrandPacket(packet.src, packet.data);
+                                }
                             }
                             break;
                         case CompeteForErrand:
-                            if(packet.data == zlecenie_dla) {
-                                if(packet.priority > my_priority || (packet.priority == my_priority && packet.src < rank)) {
-                                    sendAckErrandPacket(packet.src, packet.data);
-                                    debug("Sent ACK_ERRAND to %d for errand %d", packet.src, packet.data);
-
-                                    tryCompetingForErrandFromList();
-                                }
+                            if((packet.priority < my_priority || (packet.priority == my_priority && packet.src > rank)) && packet.data != zlecenie_dla) {
+                                errandQueue[packet.data].ack_destination = packet.src;
+                                errandQueue[packet.data].priority = packet.priority;
+                                errandQueue[packet.data].available = TAKEN;
+                                debug("Saved errand received from librarian %d", packet.data);
                             } else {
-                                if(packet.priority > my_priority || (packet.priority == my_priority && packet.src < rank)) {
-                                    if(zlecenia[packet.data] == FALSE) {
-                                        zlecenia[packet.data] = TAKEN;
-                                    } else {
-                                        zlecenia[packet.data] = FALSE;
-                                    }
-                                    sendAckErrandPacket(packet.src, packet.data);
-                                    debug("Sent ACK_ERRAND to %d for errand %d", packet.src, packet.data);
-                                } else {
-                                    if (zlecenia[packet.data] != TAKEN) 
-                                    {
-                                        zlecenia[packet.data] = TRUE;
-                                        debug("Saved errand from librarian %d", packet.data);
-                                    }
+                                if(errandQueue[packet.data].available != TRUE) {
+                                    debug("JEBAĆ ROZPROSZONE, %d", packet.data);
                                 }
-                                // obawiam się problemów z priorytetem
+                                if (errandQueue[packet.data].ack_destination == 0 || (packet.priority > errandQueue[packet.data].priority || (packet.priority == errandQueue[packet.data].priority && packet.src < errandQueue[packet.data].ack_destination))) {
+                                    if (rank == 2) {
+                                        debug("Err: %d, Dest: %d, my p: %d, his p: %d", packet.data, errandQueue[packet.data].ack_destination, my_priority, packet.priority);
+                                    }
+                                    errandQueue[packet.data].ack_destination = packet.src;
+                                    errandQueue[packet.data].priority = packet.priority;
+                                    errandQueue[packet.data].available = FALSE;
+                                    sendAckErrandPacket(packet.src, packet.data);
+                                    debug("Sent ACK_ERRAND to %d for errand %d due to highest priority REQ", packet.src, packet.data);
+                                    clearAcks();
+                                    tryCompetingForErrandFromList2();
+                                }
                             }
                             break;
                         default:
-                            sendAckErrandPacket(packet.src, packet.data);
+                            if (errandQueue[packet.data].ack_destination == 0 || (packet.priority > errandQueue[packet.data].priority || (packet.priority == errandQueue[packet.data].priority && packet.src < errandQueue[packet.data].ack_destination))) {
+                                errandQueue[packet.data].ack_destination = packet.src;
+                                errandQueue[packet.data].priority = packet.priority;
+                                errandQueue[packet.data].available = FALSE;
+                                sendAckErrandPacket(packet.src, packet.data);
+                            }
                             break;
                     }
                     break;
                 case ACK_ERRAND:
-                    switch (stan) {
-                        case CompeteForErrand:
-                            debug("Received ACK_ERRAND from %d", packet.src);
-                            if (packet.data == zlecenie_dla) {
-                                zebrane_ack[packet.src - BIBLIOTEKARZE] = TRUE;
+                    if(stan == CompeteForErrand) {
+                        debug("Received ACK_ERRAND from %d", packet.src);
+                        if (packet.data == zlecenie_dla) {
+                            zebrane_ack[packet.src - BIBLIOTEKARZE] = TRUE;
+                        }
+                        int all_ack_collected = TRUE;
+                        int sum = 0;
+                        for (int i = 0; i < CONANI; i++) {
+                            if(zebrane_ack[i] == FALSE) {
+                                all_ack_collected = FALSE;
                             }
-                            int all_ack_collected = TRUE;
-                            int sum = 0;
-                            for (int i = 0; i < CONANI; i++) {
-                                if(zebrane_ack[i] == FALSE) {
-                                    all_ack_collected = FALSE;
+                            sum += zebrane_ack[i];
+                        }
+                        debug("Collected %d ACKs for errand %d", sum, zlecenie_dla);
+                        if(all_ack_collected) {
+                            clearAcks();
+                            for(int i = 0; i < BIBLIOTEKARZE; i++) {
+                                if(errandQueue[i].available == TAKEN) {
+                                    sendAckErrandPacket(errandQueue[i].ack_destination, i);
+                                    errandQueue[i].available = FALSE;
                                 }
-                                sum += zebrane_ack[i];
                             }
-                            debug("Collected %d ACKs for errand %d", sum, zlecenie_dla);
-                            if(all_ack_collected) {
-                                clearAcks();
-                                /*for (int i = 0; i < CONANI; i++) {
-                                    zebrane_ack[i] = FALSE;
-                                }*/
-                                // changeState(CollectingEq);
-                                // for (int i = BIBLIOTEKARZE; i <= size; i++) {
-                                //     zlecenie_dla = i;
-                                //     packet.data = i;
-                                //     packet.priority = my_priority;
-                                //     sendPacket(&packet, i, REQ_EQ);
-                                // }
-                                changeState(CollectingEq);
-                                debug("Collected all ACKs for errand %d", zlecenie_dla);
-                                startCollectingEq();
-                            }
-                            break;
-                        default:
-                            break;
+                            changeState(CollectingEq);
+                            debug("Collected all ACKs for errand %d", zlecenie_dla);
+                            startCollectingEq();
+                        }
                     }
                     break;
+                // case ERRAND:
+                //     switch(stan) {
+                //         case Ready:
+                //             changeState(CompeteForErrand);
+                            
+                //             debug("Received errand from librarian %d", packet.src);
+                //             packet.data = packet.src;
+                //             zlecenie_dla = packet.src;
+                //             clearAcks();
+                //             //generalizedClearAcks(zebrane_ack);
+                //             for (int i = BIBLIOTEKARZE; i < size; i++) {
+                //                 if(i != rank) {
+                //                     zlecenia[zlecenie_dla] = TRUE;
+                //                     sendPacket(&packet, i, REQ_ERRAND);
+                //                     debug("Sent REQ_ERRAND to %d for errand %d", i, packet.data);
+                //                 }
+                //             }
+                //             break;
+                //         case CompeteForErrand:
+                //             if(zlecenia[packet.src] != TAKEN) {
+                //                 zlecenia[packet.src] = TRUE;
+                //                 debug("Saved errand received from librarian %d", packet.src);
+                //             }
+                //             // jeszcze trzeba zadbać, że jeśli dostał wcześniej REQa i odpowiedział ACK, a nie dostał ERRANDA to nie zaznaczy jako TRUE
+                //             break;
+                //         default:
+                //             if(zlecenia[packet.src] == TAKEN) {
+                //                 zlecenia[packet.src] = FALSE;
+                //             } else {
+                //                 zlecenia[packet.src] = TRUE;
+                //             }
+                //             break;
+                //     }
+                //     break;
+                // case REQ_ERRAND:
+                //     debug("Received REQ_ERRAND from %d for errand %d", packet.src, packet.data);
+                //     switch (stan) {
+                //         case Ready:
+                //             if((packet.priority < my_priority || (packet.priority == my_priority && packet.src > rank)) &&
+                //                 zlecenia[packet.data] != TAKEN) {
+                //                 changeState(CompeteForErrand);
+                //                 debug("Started competing for errand %d from REQ_ERRAND received from %d", packet.data, packet.src);
+                //                 clearAcks();
+                //                 //generalizedClearAcks(zebrane_ack);
+                //                 for (int i = BIBLIOTEKARZE; i < size; i++) {
+                //                     if(i != rank) {
+                //                         zlecenia[packet.data] = TRUE;
+                //                         zlecenie_dla = packet.data;
+                //                         sendPacket(&packet, i, REQ_ERRAND);
+                //                         debug("Sent REQ_ERRAND to %d for errand %d", i, packet.data);
+                //                     }
+                //                 }
+                //             } else {
+                //                 zlecenia[packet.data] = TAKEN;
+                //                 sendAckErrandPacket(packet.src, packet.data);
+                //                 debug("Sent ACK_ERRAND to %d for errand %d due to higher priority REQ", packet.src, packet.data);
+                //             }
+                //             break;
+                //         case CompeteForErrand:
+                //             if(packet.data == zlecenie_dla) {
+                //                 if(packet.priority > my_priority || (packet.priority == my_priority && packet.src < rank)) {
+                //                     sendAckErrandPacket(packet.src, packet.data);
+                //                     debug("Sent ACK_ERRAND to %d for errand %d", packet.src, packet.data);
+
+                //                     tryCompetingForErrandFromList();
+                //                 }
+                //             } else {
+                //                 if(packet.priority > my_priority || (packet.priority == my_priority && packet.src < rank)) {
+                //                     if(zlecenia[packet.data] == FALSE) {
+                //                         zlecenia[packet.data] = TAKEN;
+                //                     } else if (zlecenia[packet.data] == TRUE){
+                //                         zlecenia[packet.data] = FALSE;
+                //                     }
+                //                     sendAckErrandPacket(packet.src, packet.data);
+                //                     debug("Sent ACK_ERRAND to %d for errand %d", packet.src, packet.data);
+                //                 } else {
+                //                     if (zlecenia[packet.data] != TAKEN) 
+                //                     {
+                //                         zlecenia[packet.data] = TRUE;
+                //                         if(someQueue == NULL) {
+                //                             someQueue = malloc(sizeof(queueV2));
+                //                             someQueue->destination = packet.src;
+                //                             someQueue->priority = packet.priority;
+                //                             someQueue->librarian = packet.data;
+                //                             someQueue->nextItem = NULL;
+                //                         } else {
+                //                             addToQueueV2(someQueue, packet);
+                //                         }
+                //                         debug("Saved errand from librarian %d", packet.data);
+                //                     }
+                //                 }
+                //                 // obawiam się problemów z priorytetem
+                //             }
+                //             break;
+                //         default:
+                //             sendAckErrandPacket(packet.src, packet.data);
+                //             break;
+                //     }
+                //     break;
+                // case ACK_ERRAND:
+                //     switch (stan) {
+                //         case CompeteForErrand:
+                //             debug("Received ACK_ERRAND from %d", packet.src);
+                //             if (packet.data == zlecenie_dla) {
+                //                 zebrane_ack[packet.src - BIBLIOTEKARZE] = TRUE;
+                //             }
+                //             int all_ack_collected = TRUE;
+                //             int sum = 0;
+                //             for (int i = 0; i < CONANI; i++) {
+                //                 if(zebrane_ack[i] == FALSE) {
+                //                     all_ack_collected = FALSE;
+                //                 }
+                //                 sum += zebrane_ack[i];
+                //             }
+                //             debug("Collected %d ACKs for errand %d", sum, zlecenie_dla);
+                //             if(all_ack_collected) {
+                //                 clearAcks();
+                //                 sendAcksFromQueue();
+                //                 //for (int i = 0; i < CONANI; i++) {
+                //                 //    zebrane_ack[i] = FALSE;
+                //                 //}
+                //                 // changeState(CollectingEq);
+                //                 // for (int i = BIBLIOTEKARZE; i <= size; i++) {
+                //                 //     zlecenie_dla = i;
+                //                 //     packet.data = i;
+                //                 //     packet.priority = my_priority;
+                //                 //     sendPacket(&packet, i, REQ_EQ);
+                //                 // }
+                //                 changeState(CollectingEq);
+                //                 debug("Collected all ACKs for errand %d", zlecenie_dla);
+                //                 startCollectingEq();
+                //             }
+                //             break;
+                //         default:
+                //             break;
+                //     }
+                //     break;
                 case REQ_EQ:
                     switch (stan) {
                         case CompeteForErrand:
                             if (packet.data == zlecenie_dla) {
-                                tryCompetingForErrandFromList();
-                            } else {
-                                zlecenia[packet.data] = TAKEN;
-                                forwardPacket(&packet, rank, ACK_ERRAND);
+                                 tryCompetingForErrandFromList2();
                             }
+                            // } else {
+                            //     zlecenia[packet.data] = FALSE;
+                            //     forwardPacket(&packet, rank, ACK_ERRAND);
+                            // }
                             //debug("Sent ACK_EQ to %d", packet.src);
                             //equipmentQueue = sendingAckHandler(packet, equipmentQueue, &sent_eq_acks, STROJE, ACK_EQ);
                             if (sent_eq_acks) {
@@ -626,6 +831,7 @@ void *conanCommunicationThread(void *ptr) {
                                 pthread_t washing;
                                 pthread_create(&washing, NULL, washV2, 0);
                                 changeState(Ready);
+                                tryCompetingForErrandFromList2();
                             }
                     }
                     break;
@@ -640,8 +846,11 @@ void *conanCommunicationThread(void *ptr) {
                     // }
                     //never ask what happend in meantime, if you know - you know, if you don't - you don't
                     changeState(Laundry);
-
-                    zlecenia[zlecenie_dla] = FALSE;
+                    errandQueue[zlecenie_dla].available = FALSE;
+                    //zlecenia[zlecenie_dla] = FALSE;
+                    // for (int i = 0; i < BIBLIOTEKARZE; i++) {
+                    //     if (zlecenia[i] == TAKEN) zlecenia[i] = FALSE;
+                    // }
                     zlecenie_dla = -1;
 
                     startLaundry();

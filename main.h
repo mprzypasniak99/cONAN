@@ -45,6 +45,7 @@ extern int zebrane_eq_req[CONANI];
 extern int zebrane_eq_ack[CONANI]; // wydaję mi się, że dwie struktury są potrzebne, bo dopiero po zebraniu od wszystkich ACK LUB REQ my wysyłamy ACK i w jednej strukturze by się psuło, bo żeby przejść dalej musimy wiedzieć, że dostaliśmy od wszystkich WYŁĄCZNIE ACK (za długa linia, wiem, bujaj się)
 extern int zebrane_laundry_req[CONANI];
 extern int zebrane_laundry_ack[CONANI];
+extern errand errandQueue[BIBLIOTEKARZE];
 
 extern int lamport;
 int incLamport();
@@ -60,7 +61,8 @@ typedef struct {
     int ts;       /* timestamp (zegar lamporta */
     int src;      /* pole nie przesyłane, ale ustawiane w main_loop */
     int priority;
-    int data;     /* przykładowe pole z danymi; można zmienić nazwę na bardziej pasującą */
+    int data;
+    int errandNum;     /* przykładowe pole z danymi; można zmienić nazwę na bardziej pasującą */
 } packet_t;
 extern MPI_Datatype MPI_PAKIET_T;
 
@@ -118,6 +120,7 @@ extern MPI_Datatype MPI_PAKIET_T;
 
 /* wysyłanie pakietu, skrót: wskaźnik do pakietu (0 oznacza stwórz pusty pakiet), do kogo, z jakim typem */
 void sendPacket(packet_t *pkt, int destination, int tag);
+void sendPacket2(packet_t *pkt, int destination, int errandNum, int tag);
 void forwardPacket(packet_t *pkt, int destination, int tag);
 void changeState( conan_state );
 void changeLibrarianState( librarian_state newState );

@@ -5,6 +5,7 @@ void librarianMainLoop() {
     MPI_Status status;
     packet_t packet;
     int finishedErrands[CONANI] = { 0 };
+    int errand = 0;
     srand(time(NULL));
     while(l_stan != Exit_Librarian) {
         switch (l_stan)
@@ -15,6 +16,7 @@ void librarianMainLoop() {
 
             finishedErrands[packet.src - BIBLIOTEKARZE] += 1;
             sendPacket(0, packet.src, ACK_LIB);
+            errand++;
             changeLibrarianState(Preparing);
             
             for(int i = BIBLIOTEKARZE; i < size; i++) {
@@ -28,7 +30,7 @@ void librarianMainLoop() {
             
             for (int i = BIBLIOTEKARZE; i < size; i++)
             {
-                sendPacket(0, i, ERRAND);
+                sendPacket2(0, i, errand, ERRAND);
             }
             
             changeLibrarianState(Waiting);

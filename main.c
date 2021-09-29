@@ -27,6 +27,7 @@ int zebrane_eq_req[CONANI];
 int zebrane_eq_ack[CONANI];
 int zebrane_laundry_req[CONANI];
 int zebrane_laundry_ack[CONANI];
+errand errandQueue[BIBLIOTEKARZE];
 MPI_Datatype MPI_PAKIET_T;
 pthread_t threadKom, threadMon;
 
@@ -90,22 +91,24 @@ void inicjuj(int *argc, char ***argv)
     int provided;
     MPI_Init_thread(argc, argv,MPI_THREAD_MULTIPLE, &provided);
     check_thread_support(provided);
-
-
+    for (int i = 0; i < BIBLIOTEKARZE; i++) {
+        errandQueue[i] = (errand){0, TRUE, 0, 0};
+    }
     /* Stworzenie typu */
     /* Poniższe (aż do MPI_Type_commit) potrzebne tylko, jeżeli
        brzydzimy się czymś w rodzaju MPI_Send(&typ, sizeof(pakiet_t), MPI_BYTE....
     */
     /* sklejone z stackoverflow */
-    const int nitems=4; /* bo packet_t ma trzy pola */
-    int       blocklengths[4] = {1,1,1,1};
-    MPI_Datatype typy[4] = {MPI_INT, MPI_INT, MPI_INT, MPI_INT};
+    const int nitems=5; /* bo packet_t ma trzy pola */
+    int       blocklengths[5] = {1,1,1,1,1};
+    MPI_Datatype typy[5] = {MPI_INT, MPI_INT, MPI_INT, MPI_INT, MPI_INT};
 
-    MPI_Aint     offsets[4]; 
+    MPI_Aint     offsets[5]; 
     offsets[0] = offsetof(packet_t, ts);
     offsets[1] = offsetof(packet_t, src);
     offsets[2] = offsetof(packet_t, priority);
     offsets[3] = offsetof(packet_t, data);
+    offsets[4] = offsetof(packet_t, errandNum);
 
     MPI_Type_create_struct(nitems, blocklengths, offsets, typy, &MPI_PAKIET_T);
     MPI_Type_commit(&MPI_PAKIET_T);
@@ -146,6 +149,18 @@ void sendPacket(packet_t *pkt, int destination, int tag)
     pkt->src = rank;
     pkt->ts = incLamport();
     pkt->priority = my_priority;
+    MPI_Send( pkt, 1, MPI_PAKIET_T, destination, tag, MPI_COMM_WORLD);
+    if (freepkt) free(pkt);
+}
+
+void sendPacket2(packet_t *pkt, int destination, int errandNum, int tag)
+{
+    int freepkt=0;
+    if (pkt==0) { pkt = malloc(sizeof(packet_t)); freepkt=1;}
+    pkt->src = rank;
+    pkt->ts = incLamport();
+    pkt->priority = my_priority;
+    pkt->errandNum = errandNum;
     MPI_Send( pkt, 1, MPI_PAKIET_T, destination, tag, MPI_COMM_WORLD);
     if (freepkt) free(pkt);
 }
