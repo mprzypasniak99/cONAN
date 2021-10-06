@@ -101,28 +101,32 @@ void startLaundry() {
 }
 void tryCompetingForErrandFromList2() {
     if(zlecenie_dla != -1) {
-    zlecenia[zlecenie_dla] = TAKEN;
+    //zlecenia[zlecenie_dla] = FALSE;
+    errandQueue[zlecenie_dla].available = FALSE;
     zlecenie_dla = -1;
     }
+    clearAcks();
     int flag = TRUE;
     for (int i =0; i < BIBLIOTEKARZE; i++) {
-        if (errandQueue[i].available == TRUE || errandQueue[i].available == TAKEN) {
-            flag = FALSE;
-            debug("Started competing for errand for librarian %d", i);
+        if (errandQueue[i].available != FALSE) {
+            if (errandQueue[i].ack_destination == 0 || (my_priority > errandQueue[i].priority || (my_priority == errandQueue[i].priority && rank < errandQueue[i].ack_destination))) {
+                flag = FALSE;
+                debug("Started competing for errand for librarian %d", i);
 
-            packet_t packet;
-             for (int j = BIBLIOTEKARZE; j < size; j++)
-            {
-                zlecenie_dla = i;
-                packet.data = i;
-                packet.errandNum = errandQueue[i].errandNum;
-                if (j != rank)
+                packet_t packet;
+                for (int j = BIBLIOTEKARZE; j < size; j++)
                 {
-                    debug("Sent REQ_ERRAND to %d for errand %d", j, packet.data);
-                    sendPacket(&packet, j, REQ_ERRAND);
+                    zlecenie_dla = i;
+                    packet.data = i;
+                    packet.errandNum = errandQueue[i].errandNum;
+                    if (j != rank)
+                    {
+                        debug("Sent REQ_ERRAND to %d for errand %d", j, packet.data);
+                        sendPacket(&packet, j, REQ_ERRAND);
+                    }
                 }
+                break;
             }
-            break;
         }
     }
     if (flag)
@@ -343,19 +347,17 @@ void *conanCommunicationThread(void *ptr) {
                             }
                             break;
                         case CompeteForErrand:
-                            if((packet.priority < my_priority || (packet.priority == my_priority && packet.src > rank)) && packet.data != zlecenie_dla) {
-                                errandQueue[packet.data].ack_destination = packet.src;
-                                errandQueue[packet.data].priority = packet.priority;
-                                errandQueue[packet.data].available = TAKEN;
-                                debug("Saved errand received from librarian %d", packet.data);
-                            } else {
-                                if(errandQueue[packet.data].available != TRUE) {
-                                    debug("JEBAĆ ROZPROSZONE, %d", packet.data);
-                                }
-                                if (errandQueue[packet.data].ack_destination == 0 || (packet.priority > errandQueue[packet.data].priority || (packet.priority == errandQueue[packet.data].priority && packet.src < errandQueue[packet.data].ack_destination))) {
-                                    if (rank == 2) {
-                                        debug("Err: %d, Dest: %d, my p: %d, his p: %d", packet.data, errandQueue[packet.data].ack_destination, my_priority, packet.priority);
+                            if((packet.priority < my_priority || (packet.priority == my_priority && packet.src > rank))) {
+                                if(zlecenie_dla != packet.data || errandQueue[packet.data].available != FALSE) {
+                                    if (errandQueue[packet.data].ack_destination == 0 || (packet.priority > errandQueue[packet.data].priority || (packet.priority == errandQueue[packet.data].priority && packet.src < errandQueue[packet.data].ack_destination))) {
+                                        errandQueue[packet.data].ack_destination = packet.src;
+                                        errandQueue[packet.data].priority = packet.priority;
+                                        errandQueue[packet.data].available = TAKEN;
+                                        debug("Saved errand received from librarian %d", packet.data);
                                     }
+                                }
+                            } else {
+                                if (errandQueue[packet.data].ack_destination == 0 || (packet.priority > errandQueue[packet.data].priority || (packet.priority == errandQueue[packet.data].priority && packet.src < errandQueue[packet.data].ack_destination))) {
                                     errandQueue[packet.data].ack_destination = packet.src;
                                     errandQueue[packet.data].priority = packet.priority;
                                     errandQueue[packet.data].available = FALSE;
