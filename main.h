@@ -18,10 +18,10 @@
 
 #define TAKEN 2
 
-#define BIBLIOTEKARZE 2
-#define CONANI 6
-#define PRALNIA 1
-#define STROJE 2
+extern int BIBLIOTEKARZE;
+extern int CONANI;
+extern int PRALNIA;
+extern int STROJE;
 
 /* używane w wątku głównym, determinuje jak często i na jak długo zmieniają się stany */
 #define STATE_CHANGE_PROB 50
@@ -39,13 +39,13 @@ extern int my_priority;
 extern int zlecenie_dla;
 extern int sent_eq_acks;
 extern int sent_laundry_acks;
-extern int zlecenia[BIBLIOTEKARZE];
-extern int zebrane_ack[CONANI];
-extern int zebrane_eq_req[CONANI];
-extern int zebrane_eq_ack[CONANI]; // wydaję mi się, że dwie struktury są potrzebne, bo dopiero po zebraniu od wszystkich ACK LUB REQ my wysyłamy ACK i w jednej strukturze by się psuło, bo żeby przejść dalej musimy wiedzieć, że dostaliśmy od wszystkich WYŁĄCZNIE ACK (za długa linia, wiem, bujaj się)
-extern int zebrane_laundry_req[CONANI];
-extern int zebrane_laundry_ack[CONANI];
-extern errand errandQueue[BIBLIOTEKARZE];
+extern int* zlecenia;
+extern int* zebrane_ack;
+extern int* zebrane_eq_req;
+extern int* zebrane_eq_ack; // wydaję mi się, że dwie struktury są potrzebne, bo dopiero po zebraniu od wszystkich ACK LUB REQ my wysyłamy ACK i w jednej strukturze by się psuło, bo żeby przejść dalej musimy wiedzieć, że dostaliśmy od wszystkich WYŁĄCZNIE ACK (za długa linia, wiem, bujaj się)
+extern int* zebrane_laundry_req;
+extern int* zebrane_laundry_ack;
+extern errand* errandQueue;
 
 extern int lamport;
 int incLamport();
@@ -120,11 +120,11 @@ extern MPI_Datatype MPI_PAKIET_T;
 
 /* wysyłanie pakietu, skrót: wskaźnik do pakietu (0 oznacza stwórz pusty pakiet), do kogo, z jakim typem */
 void sendPacket(packet_t *pkt, int destination, int tag);
-void sendPacket2(packet_t *pkt, int destination, int errandNum, int tag);
+void sendErrandPacket(packet_t *pkt, int destination, int errandNum, int tag);
 void forwardPacket(packet_t *pkt, int destination, int tag);
-void changeState( conan_state );
+void changeConanState( conan_state );
 void changeLibrarianState( librarian_state newState );
-void *washV2();
+void *wash();
 void collect_laundry();
 void sendMutedAck(int dest, int tag, int *acks);
 #endif

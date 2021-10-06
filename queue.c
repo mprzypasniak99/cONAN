@@ -22,11 +22,11 @@ void addToQueue(queue** q, int dest, int priority) {
         *q = newElem;
     } else {
         while(tmp != NULL) {
-            if (tmp->nextItem->priority < priority) {
+            if (tmp->nextItem == NULL) {
                 newElem->nextItem = tmp->nextItem;
                 tmp->nextItem = newElem;
                 break;
-            } else if (tmp->nextItem == NULL) {
+            } else if (tmp->nextItem->priority < priority) {
                 newElem->nextItem = NULL;
                 tmp->nextItem = newElem;
             } else {
@@ -45,7 +45,7 @@ void deleteFromQueue(queue** q, int dest) {
         *q = tmp->nextItem;
     } else {
         while (tmp != NULL && tmp->nextItem != NULL) {
-            if (tmp->nextItem->destination = dest) {
+            if (tmp->nextItem->destination == dest) {
                 del = tmp->nextItem;
                 tmp->nextItem = del->nextItem;
                 break;

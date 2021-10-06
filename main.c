@@ -1,15 +1,10 @@
 #include "main.h"
-#include "conan_communication.h"
+#include "conan_errand.h"
 #include "librarian_main.h"
 #include "conan_main.h"
-#include "monitor.h"
+#include "queue.h"
 /* wątki */
 #include <pthread.h>
-
-/* sem_init sem_destroy sem_post sem_wait */
-//#include <semaphore.h>
-/* flagi dla open */
-//#include <fcntl.h>
 
 int lamport;
 
@@ -21,15 +16,22 @@ int my_priority;
 int zlecenie_dla;
 int sent_eq_acks;
 int sent_laundry_acks;
-int zlecenia[BIBLIOTEKARZE];
-int zebrane_ack[CONANI];
-int zebrane_eq_req[CONANI];
-int zebrane_eq_ack[CONANI];
-int zebrane_laundry_req[CONANI];
-int zebrane_laundry_ack[CONANI];
-errand errandQueue[BIBLIOTEKARZE];
+
+int BIBLIOTEKARZE;
+int CONANI;
+int PRALNIA;
+int STROJE;
+
+int* zlecenia;
+int* zebrane_ack;
+int* zebrane_eq_req;
+int* zebrane_eq_ack;
+int* zebrane_laundry_req;
+int* zebrane_laundry_ack;
+errand* errandQueue;
+
 MPI_Datatype MPI_PAKIET_T;
-pthread_t threadKom, threadMon;
+pthread_t threadErrand;
 
 pthread_mutex_t stateMut = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t washMut = PTHREAD_MUTEX_INITIALIZER;
@@ -88,6 +90,14 @@ void check_thread_support(int provided)
 */
 void inicjuj(int *argc, char ***argv)
 {
+    zlecenia = malloc(sizeof(int) * BIBLIOTEKARZE);
+    zebrane_ack = malloc(sizeof(int) * CONANI);
+    zebrane_eq_req = malloc(sizeof(int) * CONANI);
+    zebrane_eq_ack = malloc(sizeof(int) * CONANI);
+    zebrane_laundry_req = malloc(sizeof(int) * CONANI);
+    zebrane_laundry_ack = malloc(sizeof(int) * CONANI);
+    errandQueue = malloc(sizeof(errand) * BIBLIOTEKARZE);
+
     int provided;
     MPI_Init_thread(argc, argv,MPI_THREAD_MULTIPLE, &provided);
     check_thread_support(provided);
@@ -118,10 +128,7 @@ void inicjuj(int *argc, char ***argv)
     srand(rank);
 
     if(rank >= BIBLIOTEKARZE) {
-        pthread_create( &threadKom, NULL, conanCommunicationThread, 0);
-    }
-    if (rank==0) {
-	    pthread_create( &threadMon, NULL, startMonitor, 0);
+        pthread_create( &threadErrand, NULL, conanErrandThread, 0);
     }
     debug("jestem");
 }
@@ -131,11 +138,18 @@ void inicjuj(int *argc, char ***argv)
 */
 void finalizuj()
 {
+    free(zlecenia);
+    free(zebrane_ack);
+    free(zebrane_eq_ack);
+    free(zebrane_eq_req);
+    free(zebrane_laundry_ack);
+    free(zebrane_laundry_req);
+    free(errandQueue);
+
     pthread_mutex_destroy( &stateMut);
     /* Czekamy, aż wątek potomny się zakończy */
     println("czekam na wątek \"komunikacyjny\"\n" );
-    pthread_join(threadKom,NULL);
-    if (rank==0) pthread_join(threadMon,NULL);
+    pthread_join(threadErrand,NULL);
     MPI_Type_free(&MPI_PAKIET_T);
     MPI_Finalize();
 }
@@ -153,7 +167,7 @@ void sendPacket(packet_t *pkt, int destination, int tag)
     if (freepkt) free(pkt);
 }
 
-void sendPacket2(packet_t *pkt, int destination, int errandNum, int tag)
+void sendErrandPacket(packet_t *pkt, int destination, int errandNum, int tag)
 {
     int freepkt=0;
     if (pkt==0) { pkt = malloc(sizeof(packet_t)); freepkt=1;}
@@ -171,18 +185,7 @@ void forwardPacket(packet_t *pkt, int destination, int tag) {
     }
 }
 
-// void changeTallow( int newTallow )
-// {
-//     pthread_mutex_lock( &tallowMut );
-//     if (stan==InFinish) { 
-// 	pthread_mutex_unlock( &tallowMut );
-//         return;
-//     }
-//     tallow += newTallow;
-//     pthread_mutex_unlock( &tallowMut );
-// }
-
-void changeState( conan_state newState )
+void changeConanState( conan_state newState )
 {
     pthread_mutex_lock( &stateMut );
     if (stan==Exit) { 
@@ -204,23 +207,19 @@ void changeLibrarianState( librarian_state newState )
     pthread_mutex_unlock( &stateMut );
 }
 
-void *washV2() {
-    sleep(7);
+void *wash() {
+    sleep(15);
     debug("Washing ended");
     pthread_mutex_lock(&washMut);
     while(equipmentQueue != NULL) {
         sendPacket(0, equipmentQueue->destination, ACK_EQ);
         debug("ACK_EQ sent to %d", equipmentQueue->destination);
-        queue *del = equipmentQueue;
-        equipmentQueue = equipmentQueue->nextItem;
-        free(del);
+        deleteFromQueue(&equipmentQueue, equipmentQueue->destination);
     }
     while(laundryQueue != NULL) {
         sendPacket(0, laundryQueue->destination, ACK_LAUNDRY);
         debug("ACK_LAUNDRY sent to %d", laundryQueue->destination);
-        queue *del = laundryQueue;
-        laundryQueue = laundryQueue->nextItem;
-        free(del);
+        deleteFromQueue(&laundryQueue, laundryQueue->destination);
     }
     sent_eq_acks = 0;
     sent_laundry_acks = 0;
@@ -228,55 +227,32 @@ void *washV2() {
     pthread_mutex_unlock( &washMut );
 }
 
-void *wash() {
-    sleep(7);
-    pthread_mutex_lock(&washMut);
-    if(equipmentQueue != NULL) {
-        sendPacket(0, equipmentQueue->destination, ACK_EQ);
-        queue *del = equipmentQueue;
-        equipmentQueue = equipmentQueue->nextItem;
-        free(del);
-        debug("Sent ACK_EQ");
-    } else sent_eq_acks--;
-    if(laundryQueue != NULL) {
-        sendPacket(0, laundryQueue->destination, ACK_LAUNDRY);
-        queue *del = laundryQueue;
-        laundryQueue = laundryQueue->nextItem;
-        free(del);
-        debug("Sent ACK_LAUNDRY");
-    } else sent_laundry_acks--;
-    pthread_mutex_unlock( &washMut );
-    debug("Washing handled");
-}
-
 void sendMutedAck(int dest, int tag, int *acks) {
     pthread_mutex_lock(&washMut);
     //(*acks)++;
     sendPacket(0, dest, tag);
-    debug("Sent ACK %d to %d", tag, dest);
-    pthread_mutex_unlock( &washMut );
-}
-
-void collect_laundry() {
-    pthread_mutex_lock(&washMut);
-    //sent_laundry_acks -= rzeczy_do_odebrania;
-    //sent_eq_acks -= rzeczy_do_odebrania;
-    //rzeczy_do_odebrania = 0;
-    //useless
     pthread_mutex_unlock( &washMut );
 }
 
 int main(int argc, char **argv)
 {
-    /* Tworzenie wątków, inicjalizacja itp */
-    inicjuj(&argc,&argv); // tworzy wątek komunikacyjny w "watek_komunikacyjny.c"
+    if (argc < 5) {
+        printf("Not enough arguments to start");
+        return -1;
+    }
+
+    BIBLIOTEKARZE = atoi(argv[1]);
+    CONANI = atoi(argv[2]);
+    PRALNIA = atoi(argv[3]);
+    STROJE = atoi(argv[4]);
+
+    inicjuj(&argc,&argv);
     if (rank < BIBLIOTEKARZE)
     {
         librarianMainLoop();
     } else {
         conanMainLoop();
     }
-             // w pliku "watek_glowny.c"
 
     finalizuj();
     return 0;

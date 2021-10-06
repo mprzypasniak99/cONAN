@@ -4,7 +4,10 @@
 void librarianMainLoop() {
     MPI_Status status;
     packet_t packet;
-    int finishedErrands[CONANI] = { 0 };
+    int* finishedErrands = malloc(sizeof(int) * CONANI);
+    for (int i = 0; i < CONANI; i++) {
+        finishedErrands[i] = 0;
+    }
     int errand = 0;
     srand(time(NULL));
     while(l_stan != Exit_Librarian) {
@@ -30,7 +33,7 @@ void librarianMainLoop() {
             
             for (int i = BIBLIOTEKARZE; i < size; i++)
             {
-                sendPacket2(0, i, errand, ERRAND);
+                sendErrandPacket(0, i, errand, ERRAND);
             }
             
             changeLibrarianState(Waiting);
